@@ -1,11 +1,13 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "./ui/button";
 
 export function Navbar() {
   const { data: session } = useSession();
+  const router = useRouter();
 
   if (!session) return null;
 
@@ -55,7 +57,10 @@ export function Navbar() {
             </span>
           </span>
 
-          <Button variant="ghost" size="sm" onClick={() => signOut({ callbackUrl: "/login" })}>
+          <Button variant="ghost" size="sm" onClick={async () => {
+            await signOut({ redirect: false });
+            router.push("/login");
+          }}>
             退出
           </Button>
         </div>
