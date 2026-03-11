@@ -55,7 +55,7 @@ export function Navbar() {
             </span>
           </span>
 
-          <Button variant="ghost" size="sm" onClick={() => signOut()}>
+          <Button variant="ghost" size="sm" onClick={() => signOut({ callbackUrl: "/login" })}>
             退出
           </Button>
         </div>
