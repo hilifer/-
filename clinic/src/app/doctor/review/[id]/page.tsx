@@ -241,13 +241,13 @@ export default function ReviewPage({
             {herbs.map((herb, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Input
-                  className="flex-1"
+                  className="flex-1 min-w-0"
                   value={herb.name}
                   onChange={(e) => updateHerb(i, "name", e.target.value)}
                   placeholder="药材名称"
                 />
-                <Input
-                  className="w-24"
+                <input
+                  className="w-24 flex-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   type="number"
                   value={herb.dosage}
                   onChange={(e) =>
@@ -255,12 +255,12 @@ export default function ReviewPage({
                   }
                   placeholder="剂量"
                 />
-                <span className="text-gray-400 text-sm w-6">{herb.unit}</span>
+                <span className="text-gray-400 text-sm flex-none">{herb.unit}</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => removeHerb(i)}
-                  className="text-red-400"
+                  className="text-red-400 flex-none"
                 >
                   删除
                 </Button>
