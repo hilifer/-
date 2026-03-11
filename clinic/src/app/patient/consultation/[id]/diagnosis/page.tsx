@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -32,9 +32,9 @@ interface ConsultationData {
 export default function DiagnosisPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = use(params);
+  const { id } = params;
   const { data: session, status } = useSession();
   const router = useRouter();
   const [consultation, setConsultation] = useState<ConsultationData | null>(null);
