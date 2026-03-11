@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  phone         String    @unique
+  passwordHash  String
+  role          String    @default("PATIENT") // PATIENT | DOCTOR | ADMIN
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  consultations         Consultation[]
+  patientPrescriptions  Prescription[]   @relation("PatientPrescriptions")
+  doctorPrescriptions   Prescription[]   @relation("DoctorPrescriptions")
+}
+
+model Herb {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  pinyin      String
+  category    String
+  nature      String
+  flavor      String
+  meridians   String
+  effects     String
+  dosageMin   Float
+  dosageMax   Float
+  cautions    String  @default("")
+}
+
+model IncompatiblePair {
+  id      String @id @default(uuid())
+  herbA   String
+  herbB   String
+  type    String // EIGHTEEN_INCOMPATIBLES | NINETEEN_ANTAGONISMS
+  note    String @default("")
+}
+
+model Consultation {
+  id           String        @id @default(uuid())
+  patientId    String
+  patient      User          @relation(fields: [patientId], references: [id])
+  status       String        @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED | DIAGNOSED
+  messages     Message[]
+  diagnosis    Diagnosis?
+  prescription Prescription?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id])
+  role           String       // USER | ASSISTANT
+  content        String
+  extractedInfo  String       @default("")
+  roundNumber    Int
+  createdAt      DateTime     @default(now())
+}
+
+model Diagnosis {
+  id                 String       @id @default(uuid())
+  consultationId     String       @unique
+  consultation       Consultation @relation(fields: [consultationId], references: [id])
+  syndromeType       String
+  confidence         Float
+  reasoning          String
+  recommendedFormula String
+  formulaHerbs       String
+  tongueImage        String       @default("")
+  faceImage          String       @default("")
+  createdAt          DateTime     @default(now())
+}
+
+model Prescription {
+  id             String       @id @default(uuid())
+  consultationId String       @unique
+  consultation   Consultation @relation(fields: [consultationId], references: [id])
+  patientId      String
+  patient        User         @relation("PatientPrescriptions", fields: [patientId], references: [id])
+  doctorId       String?
+  doctor         User?        @relation("DoctorPrescriptions", fields: [doctorId], references: [id])
+  herbs          String       // JSON: [{name, dosage, unit}]
+  adoptionLevel  String       @default("PENDING") // PENDING | ADOPT_ALL | PARTIAL_MODIFY | FULL_REWRITE
+  safetyWarnings String       @default("[]")
+  doctorNotes    String       @default("")
+  status         String       @default("DRAFT") // DRAFT | SIGNED | VIEWED
+  signedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}

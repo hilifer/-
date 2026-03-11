@@ -2,154 +2,119 @@
 
 ## Project Overview
 
-This is a **Traditional Chinese & Western Medicine Clinic Web Platform** — a comprehensive outpatient consultation system that integrates AI-powered diagnostic assistance with traditional and modern medical practices.
+**杏林智诊** — 中西医结合智慧诊疗平台。单体 Next.js 应用，AI辅助多轮问诊 → 辨证施治 → 处方安全检查 → 医生审核签发。
 
-### Core Vision
-
-- **Patient portal**: Registration, appointment booking, medical records, and image uploads (facial features, palm lines, tongue coating, ears, etc.)
-- **Doctor portal**: Registration, patient review, AI-assisted diagnosis, and prescription management
-- **Admin system**: User management, system configuration, and analytics
-- **AI diagnostics module**: Deep learning models that analyze patient images (face, palms, tongue, ears) to assist TCM diagnosis
-- **Data libraries**: Herbal medicine database, prescription library, and AI training dataset
-
-## Repository Status
-
-This project is in the **early planning / greenfield stage**. No code has been written yet — only the project description exists in `README.md`.
-
-## Recommended Technology Stack
-
-*(To be finalized — these are suggestions based on the project requirements)*
-
-| Layer | Technology | Rationale |
-|---|---|---|
-| Frontend | React / Next.js + TypeScript | Rich UI for patient/doctor portals |
-| Backend API | Python (FastAPI or Django REST) | Strong AI/ML ecosystem |
-| Database | PostgreSQL | Relational data, JSONB for flexible schemas |
-| AI/ML | PyTorch / TensorFlow | Image classification and analysis models |
-| Object Storage | MinIO / S3 | Patient image storage |
-| Auth | JWT + Role-based access control | Patient / Doctor / Admin roles |
-| Deployment | Docker + Docker Compose | Reproducible environments |
-
-## Project Structure (Planned)
+### Core Business Flow
 
 ```
-/
-├── CLAUDE.md              # This file — AI assistant guide
-├── README.md              # Project description (Chinese)
-├── frontend/              # Web frontend (React/Next.js)
-│   ├── src/
-│   │   ├── components/    # Reusable UI components
-│   │   ├── pages/         # Route-level pages
-│   │   ├── hooks/         # Custom React hooks
-│   │   ├── services/      # API client functions
-│   │   └── types/         # TypeScript type definitions
-│   └── package.json
-├── backend/               # API server (Python)
+患者登录 → AI预问诊(8轮对话) → AI辨证(证型+置信度+推荐方)
+→ 处方安全检查(十八反/十九畏/剂量) → 医生审核(采纳/修改/重写)
+→ 电子签发 → 患者查看处方
+```
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Full-stack | Next.js 14 (App Router) |
+| Styling | Tailwind CSS + custom UI components |
+| Database | SQLite (dev) via Prisma 5 ORM |
+| Auth | NextAuth.js v4 (Credentials Provider + JWT) |
+| Testing | Jest + ts-jest |
+| Deployment | Docker / Docker Compose |
+
+## Project Structure
+
+```
+clinic/
+├── prisma/
+│   ├── schema.prisma          # Data models (User, Herb, Consultation, etc.)
+│   ├── seed.ts                # 103 herbs + incompatible pairs + demo users
+│   └── dev.db                 # SQLite database (gitignored)
+├── src/
 │   ├── app/
-│   │   ├── api/           # Route handlers / endpoints
-│   │   ├── models/        # Database models (ORM)
-│   │   ├── schemas/       # Pydantic request/response schemas
-│   │   ├── services/      # Business logic
-│   │   └── core/          # Config, security, database setup
-│   ├── migrations/        # Database migrations
-│   ├── tests/             # Backend tests
-│   └── requirements.txt
-├── ai/                    # AI/ML module
-│   ├── models/            # Model architectures
-│   ├── training/          # Training scripts and configs
-│   ├── inference/         # Inference service / API
-│   └── data/              # Dataset management utilities
-├── database/              # SQL schemas, seed data
-├── docker-compose.yml     # Multi-service orchestration
-└── docs/                  # Additional documentation
+│   │   ├── (auth)/login/      # Login page
+│   │   ├── (auth)/register/   # Register page
+│   │   ├── patient/
+│   │   │   ├── consultation/  # AI multi-round chat + diagnosis view
+│   │   │   └── prescriptions/ # Patient prescription list
+│   │   ├── doctor/
+│   │   │   ├── patients/      # Patient queue for review
+│   │   │   └── review/[id]/   # Prescription review + edit + sign
+│   │   ├── api/
+│   │   │   ├── auth/          # NextAuth + register endpoints
+│   │   │   ├── consultation/  # CRUD + message + diagnose
+│   │   │   ├── prescription/  # Review + sign
+│   │   │   └── herbs/         # Herb search
+│   │   ├── layout.tsx         # Root layout (dark theme)
+│   │   └── page.tsx           # Landing / role-based redirect
+│   ├── components/
+│   │   ├── ui/                # Button, Input, Card, Badge
+│   │   ├── ai-banner.tsx      # Red "AI辅助意见" warning banner
+│   │   ├── navbar.tsx         # Role-aware navigation
+│   │   └── providers.tsx      # SessionProvider wrapper
+│   ├── lib/
+│   │   ├── auth.ts            # NextAuth config
+│   │   ├── prisma.ts          # Prisma client singleton
+│   │   ├── ai-consultation.ts # Multi-round Q&A + diagnosis engine
+│   │   ├── safety-check.ts    # 十八反/十九畏/剂量 rule checker
+│   │   └── __tests__/         # Unit tests (21 tests)
+│   └── types/
+│       └── next-auth.d.ts     # Session type augmentation
+├── Dockerfile
+├── docker-compose.yml
+├── jest.config.ts
+└── package.json
 ```
-
-## Development Conventions
-
-### Language & Localization
-
-- **Code**: All code, comments, variable names, and commit messages in **English**
-- **User-facing content**: Support **Chinese (Simplified)** as the primary UI language
-- README and project descriptions may remain in Chinese
-
-### Code Style
-
-- **Python**: Follow PEP 8; use type hints; format with `black` and lint with `ruff`
-- **TypeScript/JavaScript**: Use ESLint + Prettier; prefer functional components and hooks
-- **SQL**: Use lowercase keywords; snake_case for table and column names
-
-### Git Workflow
-
-- Write clear, descriptive commit messages in English
-- Use conventional commits format: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
-- Keep commits focused — one logical change per commit
-
-### Security Requirements (Critical)
-
-This is a **medical application** handling sensitive patient data:
-
-- Never store plaintext passwords — always use bcrypt or argon2
-- All patient images and medical records must be access-controlled
-- Implement proper RBAC: patients see only their own data, doctors see assigned patients
-- Sanitize all user inputs — prevent SQL injection, XSS, and file upload attacks
-- Use HTTPS in production; sign and validate all JWTs
-- Comply with relevant medical data protection regulations
-- Never commit secrets, API keys, or credentials to the repository
-
-### AI/ML Guidelines
-
-- Store trained model weights outside the git repo (use Git LFS or external storage)
-- Document model architectures, training hyperparameters, and dataset versions
-- Include evaluation metrics and benchmark results with each model version
-- Patient images used for training must be anonymized and consent-verified
-
-### Testing
-
-- Backend: Use `pytest` with fixtures; aim for coverage on all API endpoints
-- Frontend: Use Jest + React Testing Library for component tests
-- AI: Include unit tests for data preprocessing and inference pipelines
 
 ## Common Commands
 
-*(To be populated as the project scaffolding is built)*
-
 ```bash
-# Backend
-# pip install -r backend/requirements.txt
-# cd backend && uvicorn app.main:app --reload
+# One-command setup (generates Prisma client, creates DB, seeds data)
+cd clinic && npm install && npm run setup
 
-# Frontend
-# cd frontend && npm install && npm run dev
+# Development
+npm run dev              # Start dev server on http://localhost:3000
 
 # Database
-# docker-compose up -d db
-# cd backend && alembic upgrade head
+npm run db:push          # Push schema changes to SQLite
+npm run db:seed          # Seed 103 herbs + demo users
+npm run db:reset         # Reset DB and re-seed
 
-# Tests
-# cd backend && pytest
-# cd frontend && npm test
+# Testing
+npm test                 # Run all Jest tests (21 tests)
 
-# Linting
-# cd backend && ruff check . && black --check .
-# cd frontend && npm run lint
+# Docker
+docker-compose up --build
 ```
 
-## Key Domain Concepts
+## Demo Accounts
 
-| Term (EN) | Term (ZH) | Description |
+| Role | Phone | Password |
 |---|---|---|
-| TCM | 中医 | Traditional Chinese Medicine |
-| Prescription | 处方 | Herbal medicine formula |
-| Herbal Database | 药材库 | Catalog of medicinal herbs and materials |
-| Tongue Diagnosis | 舌诊 | TCM diagnostic method analyzing tongue coating and color |
-| Palm Reading | 手诊 | Diagnostic analysis of palm lines and texture |
-| Face Diagnosis | 面诊 | Facial feature analysis for health indicators |
-| Ear Diagnosis | 耳诊 | Ear morphology analysis for health assessment |
+| Patient | 13800000001 | 123456 |
+| Doctor | 13800000002 | 123456 |
 
-## Notes for AI Assistants
+## Key Design Decisions
 
-- This is a medical platform — prioritize **correctness and safety** over speed
-- Always validate that AI diagnostic features are positioned as **assistive tools**, not replacements for physician judgment
-- When generating database schemas, consider HIPAA-style data protection principles
-- Patient-uploaded images are sensitive — treat them with the same care as medical records
-- When uncertain about medical domain specifics, flag them for human review rather than guessing
+- **Single Next.js monolith**: Frontend + API in one project, zero microservice overhead
+- **SQLite for dev**: Zero external dependencies, `npm run dev` just works
+- **Prisma 5**: Battle-tested ORM, simple `@prisma/client` imports
+- **Rule-based safety check**: 十八反/十九畏 are fixed drug pairs, hardcoded (no AI needed)
+- **Simulated AI**: Pattern-matching diagnosis engine (swap for real LLM API in production)
+- **Dark theme**: `#0a0f0d` background + emerald-400 accent (`#4ade80`)
+
+## UI Conventions
+
+- **Theme**: Dark background `#0a0f0d` + emerald green primary `#4ade80`
+- **AI Banner**: Red `bg-red-600` banner on every AI result: "AI辅助意见，仅供参考，最终诊断以医师为准"
+- **Adoption buttons**: Adopt All (green) / Partial Modify (yellow) / Full Rewrite (red)
+- **Chinese UI**: All user-facing text in Chinese characters directly (no `\uXXXX` escapes)
+
+## Development Conventions
+
+- **Code**: English variable names, comments, commit messages
+- **UI text**: Chinese (Simplified)
+- **Git**: Conventional commits (`feat:`, `fix:`, `docs:`, etc.)
+- **Security**: bcrypt passwords, role-based access, input validation
+- **No over-engineering**: No microservices, message queues, K8s, or custom ML training
