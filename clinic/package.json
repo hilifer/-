@@ -10,7 +10,7 @@
     "db:push": "prisma db push",
     "db:seed": "node --import tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && node --import tsx prisma/seed.ts",
-    "setup": "prisma generate && prisma db push && node --import tsx prisma/seed.ts",
+    "setup": "cp -n .env.example .env 2>/dev/null; prisma generate && prisma db push && node --import tsx prisma/seed.ts",
     "test": "jest"
   },
   "dependencies": {
