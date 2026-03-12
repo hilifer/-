@@ -1,4 +1,4 @@
-// LLM service layer - supports OpenAI, Anthropic, DeepSeek, and OpenAI-compatible APIs
+// LLM service layer - multi-provider support with per-provider API adapters
 import { prisma } from "./prisma";
 
 interface ChatMessage {
@@ -16,6 +16,75 @@ interface AiConfigData {
   maxTokens: number;
   systemPrompt: string;
 }
+
+// Per-provider API configuration
+interface ProviderSpec {
+  defaultBaseUrl: string;
+  chatPath: string; // path appended to baseUrl, e.g. "/chat/completions"
+  authType: "bearer" | "x-api-key" | "bearer-custom";
+  extraHeaders?: Record<string, string>;
+  // How to build the request body and parse the response
+  apiFormat: "openai" | "anthropic";
+}
+
+// Provider-specific API configurations
+const PROVIDER_SPECS: Record<string, ProviderSpec> = {
+  openai: {
+    defaultBaseUrl: "https://api.openai.com/v1",
+    chatPath: "/chat/completions",
+    authType: "bearer",
+    apiFormat: "openai",
+  },
+  anthropic: {
+    defaultBaseUrl: "https://api.anthropic.com",
+    chatPath: "/v1/messages",
+    authType: "x-api-key",
+    extraHeaders: { "anthropic-version": "2023-06-01" },
+    apiFormat: "anthropic",
+  },
+  deepseek: {
+    defaultBaseUrl: "https://api.deepseek.com/v1",
+    chatPath: "/chat/completions",
+    authType: "bearer",
+    apiFormat: "openai",
+  },
+  kimi: {
+    defaultBaseUrl: "https://api.moonshot.cn/v1",
+    chatPath: "/chat/completions",
+    authType: "bearer",
+    apiFormat: "openai",
+  },
+  qwen: {
+    defaultBaseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    chatPath: "/chat/completions",
+    authType: "bearer",
+    apiFormat: "openai",
+  },
+  zhipu: {
+    defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    chatPath: "/chat/completions",
+    authType: "bearer",
+    apiFormat: "openai",
+  },
+  baichuan: {
+    defaultBaseUrl: "https://api.baichuan-ai.com/v1",
+    chatPath: "/chat/completions",
+    authType: "bearer",
+    apiFormat: "openai",
+  },
+  spark: {
+    defaultBaseUrl: "https://spark-api-open.xf-yun.com/v1",
+    chatPath: "/chat/completions",
+    authType: "bearer",
+    apiFormat: "openai",
+  },
+  custom: {
+    defaultBaseUrl: "",
+    chatPath: "/chat/completions",
+    authType: "bearer",
+    apiFormat: "openai",
+  },
+};
 
 let configCache: AiConfigData | null = null;
 let configCacheTime = 0;
@@ -40,35 +109,51 @@ export function clearConfigCache() {
   configCache = null;
 }
 
-function getBaseUrl(config: AiConfigData): string {
-  if (config.baseUrl) return config.baseUrl;
-
-  const defaults: Record<string, string> = {
-    openai: "https://api.openai.com/v1",
-    anthropic: "https://api.anthropic.com",
-    deepseek: "https://api.deepseek.com/v1",
-    kimi: "https://api.moonshot.cn/v1",
-    qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    zhipu: "https://open.bigmodel.cn/api/paas/v4",
-    baichuan: "https://api.baichuan-ai.com/v1",
-    spark: "https://spark-api-open.xf-yun.com/v1",
-  };
-  return defaults[config.provider] || "https://api.openai.com/v1";
+function getProviderSpec(provider: string): ProviderSpec {
+  return PROVIDER_SPECS[provider] || PROVIDER_SPECS.custom;
 }
 
-// OpenAI-compatible API call (works for OpenAI, DeepSeek, and custom providers)
-async function callOpenAICompatible(
+function getBaseUrl(config: AiConfigData): string {
+  if (config.baseUrl) return config.baseUrl.replace(/\/+$/, ""); // trim trailing slash
+  const spec = getProviderSpec(config.provider);
+  return spec.defaultBaseUrl;
+}
+
+function buildHeaders(config: AiConfigData, spec: ProviderSpec): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  switch (spec.authType) {
+    case "bearer":
+    case "bearer-custom":
+      headers["Authorization"] = `Bearer ${config.apiKey}`;
+      break;
+    case "x-api-key":
+      headers["x-api-key"] = config.apiKey;
+      break;
+  }
+
+  if (spec.extraHeaders) {
+    Object.assign(headers, spec.extraHeaders);
+  }
+
+  return headers;
+}
+
+// OpenAI-compatible chat completions
+async function callOpenAIFormat(
   messages: ChatMessage[],
-  config: AiConfigData
+  config: AiConfigData,
+  spec: ProviderSpec
 ): Promise<string> {
   const baseUrl = getBaseUrl(config);
+  const url = `${baseUrl}${spec.chatPath}`;
+  const headers = buildHeaders(config, spec);
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-    },
+    headers,
     body: JSON.stringify({
       model: config.model,
       messages,
@@ -78,8 +163,13 @@ async function callOpenAICompatible(
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`API 调用失败 (${res.status}): ${err}`);
+    const errBody = await res.text();
+    throw new Error(
+      `[${config.provider}] API 调用失败 (${res.status})\n` +
+      `请求地址: ${url}\n` +
+      `模型: ${config.model}\n` +
+      `响应: ${errBody}`
+    );
   }
 
   const data = await res.json();
@@ -87,9 +177,10 @@ async function callOpenAICompatible(
 }
 
 // Anthropic Messages API
-async function callAnthropic(
+async function callAnthropicFormat(
   messages: ChatMessage[],
-  config: AiConfigData
+  config: AiConfigData,
+  spec: ProviderSpec
 ): Promise<string> {
   const systemMsg = messages.find((m) => m.role === "system")?.content || "";
   const chatMessages = messages
@@ -97,14 +188,12 @@ async function callAnthropic(
     .map((m) => ({ role: m.role, content: m.content }));
 
   const baseUrl = getBaseUrl(config);
+  const url = `${baseUrl}${spec.chatPath}`;
+  const headers = buildHeaders(config, spec);
 
-  const res = await fetch(`${baseUrl}/v1/messages`, {
+  const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": config.apiKey,
-      "anthropic-version": "2023-06-01",
-    },
+    headers,
     body: JSON.stringify({
       model: config.model,
       max_tokens: config.maxTokens,
@@ -115,8 +204,13 @@ async function callAnthropic(
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Anthropic API 调用失败 (${res.status}): ${err}`);
+    const errBody = await res.text();
+    throw new Error(
+      `[${config.provider}] Anthropic API 调用失败 (${res.status})\n` +
+      `请求地址: ${url}\n` +
+      `模型: ${config.model}\n` +
+      `响应: ${errBody}`
+    );
   }
 
   const data = await res.json();
@@ -140,14 +234,14 @@ export async function callLLM(messages: ChatMessage[]): Promise<string> {
     messages = [{ role: "system", content: config.systemPrompt }, ...messages];
   }
 
-  switch (config.provider) {
+  const spec = getProviderSpec(config.provider);
+
+  switch (spec.apiFormat) {
     case "anthropic":
-      return callAnthropic(messages, config);
+      return callAnthropicFormat(messages, config, spec);
     case "openai":
-    case "deepseek":
-    case "custom":
     default:
-      return callOpenAICompatible(messages, config);
+      return callOpenAIFormat(messages, config, spec);
   }
 }
 

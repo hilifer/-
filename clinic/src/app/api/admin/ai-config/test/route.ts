@@ -132,33 +132,57 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "未知错误";
+    const fullMessage = err instanceof Error ? err.message : "未知错误";
+
+    // Split multi-line error into summary + details
+    const lines = fullMessage.split("\n");
+    const summary = lines[0]; // First line is the summary
+    const errorDetails = lines.slice(1).filter((l) => l.trim()); // Remaining lines are details
 
     // Parse common API errors for friendlier messages
     let hint = "";
-    if (message.includes("401") || message.includes("Unauthorized")) {
-      hint = "API Key 无效或已过期，请检查密钥是否正确";
-    } else if (message.includes("403") || message.includes("Forbidden")) {
-      hint = "API Key 权限不足，请确认密钥有访问该模型的权限";
-    } else if (message.includes("404") || message.includes("Not Found")) {
-      hint = "API 地址或模型名称错误，请检查 Base URL 和模型名称是否正确";
-    } else if (message.includes("429") || message.includes("Rate")) {
-      hint = "请求频率超限，请稍后重试或检查账户额度";
-    } else if (message.includes("500") || message.includes("Internal")) {
-      hint = "API 服务端错误，请稍后重试";
+    if (fullMessage.includes("401") || fullMessage.includes("Unauthorized") || fullMessage.includes("invalid_authentication")) {
+      hint =
+        "API Key 无效或已过期。请检查：\n" +
+        "1. 密钥是否正确复制（无多余空格）\n" +
+        "2. 密钥是否属于当前选择的提供商\n" +
+        "3. 密钥是否已过期或被禁用";
+    } else if (fullMessage.includes("403") || fullMessage.includes("Forbidden")) {
+      hint =
+        "API Key 权限不足。请确认：\n" +
+        "1. 密钥有访问该模型的权限\n" +
+        "2. 账户已完成实名认证（部分国内厂商要求）\n" +
+        "3. 账户余额充足";
+    } else if (fullMessage.includes("404") || fullMessage.includes("Not Found")) {
+      hint =
+        "API 地址或模型名称错误。请检查：\n" +
+        "1. API 地址（Base URL）是否正确\n" +
+        "2. 模型名称是否拼写正确\n" +
+        "3. 该模型是否已上线（部分模型需要申请开通）";
+    } else if (fullMessage.includes("429") || fullMessage.includes("Rate")) {
+      hint = "请求频率超限或账户额度不足，请稍后重试或充值";
+    } else if (fullMessage.includes("500") || fullMessage.includes("Internal")) {
+      hint = "API 服务端错误，请稍后重试。如持续出现请联系对应厂商客服";
     } else if (
-      message.includes("ENOTFOUND") ||
-      message.includes("ECONNREFUSED") ||
-      message.includes("fetch failed")
+      fullMessage.includes("ENOTFOUND") ||
+      fullMessage.includes("ECONNREFUSED") ||
+      fullMessage.includes("fetch failed")
     ) {
-      hint = "无法连接到 API 服务器，请检查 API 地址是否正确、网络是否通畅";
-    } else if (message.includes("timeout") || message.includes("ETIMEDOUT")) {
+      hint =
+        "无法连接到 API 服务器。请检查：\n" +
+        "1. API 地址是否正确\n" +
+        "2. 服务器网络是否能访问该地址\n" +
+        "3. 是否需要配置代理";
+    } else if (fullMessage.includes("timeout") || fullMessage.includes("ETIMEDOUT")) {
       hint = "连接超时，请检查网络或 API 地址是否可达";
+    } else if (fullMessage.includes("invalid_request") || fullMessage.includes("model")) {
+      hint = "请求参数错误，请检查模型名称是否正确";
     }
 
     return NextResponse.json({
       success: false,
-      error: message,
+      error: summary,
+      errorDetails,
       hint,
       config: {
         provider: config.provider,

@@ -309,7 +309,12 @@ export default function AdminSettingsPage() {
       setTestLatency(data.latency || "");
     } else {
       setTestResult(data.error || "测试失败");
-      setTestDetails(data.details || []);
+      // Merge config diagnostics + API error details
+      const allDetails = [
+        ...(data.details || []),
+        ...(data.errorDetails || []),
+      ];
+      setTestDetails(allDetails);
       setTestHint(data.hint || "");
     }
     setTesting(false);
@@ -747,7 +752,7 @@ export default function AdminSettingsPage() {
                   )}
                   {testHint && (
                     <div className="mt-2 border-t border-red-500/20 pt-2">
-                      <div className="text-yellow-400/80 text-xs">
+                      <div className="text-yellow-400/80 text-xs whitespace-pre-line">
                         <span className="font-medium">建议：</span>{testHint}
                       </div>
                     </div>
