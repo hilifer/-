@@ -34,6 +34,7 @@ export default function ReviewPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [consultation, setConsultation] = useState<any>(null);
   const [herbs, setHerbs] = useState<HerbEntry[]>([]);
+  const [originalHerbs, setOriginalHerbs] = useState<HerbEntry[]>([]);
   const [warnings, setWarnings] = useState<SafetyWarningEntry[]>([]);
   const [doctorNotes, setDoctorNotes] = useState("");
   const [adoptionLevel, setAdoptionLevel] = useState("ADOPT_ALL");
@@ -52,12 +53,17 @@ export default function ReviewPage({
       .then((data) => {
         setConsultation(data);
         if (data.prescription) {
-          setHerbs(JSON.parse(data.prescription.herbs));
+          const parsedHerbs = JSON.parse(data.prescription.herbs);
+          setHerbs(parsedHerbs);
           setWarnings(JSON.parse(data.prescription.safetyWarnings));
           setDoctorNotes(data.prescription.doctorNotes || "");
           if (data.prescription.adoptionLevel !== "PENDING") {
             setAdoptionLevel(data.prescription.adoptionLevel);
           }
+        }
+        // Store original AI herbs from diagnosis for reset
+        if (data.diagnosis?.formulaHerbs) {
+          setOriginalHerbs(JSON.parse(data.diagnosis.formulaHerbs));
         }
       });
   }, [id]);
@@ -206,13 +212,18 @@ export default function ReviewPage({
           <div className="flex gap-3">
             <Button
               variant={adoptionLevel === "ADOPT_ALL" ? "default" : "outline"}
-              onClick={() => setAdoptionLevel("ADOPT_ALL")}
+              onClick={() => {
+                setAdoptionLevel("ADOPT_ALL");
+                setHerbs(originalHerbs.map((h) => ({ ...h })));
+              }}
             >
               采纳全部
             </Button>
             <Button
               variant={adoptionLevel === "PARTIAL_MODIFY" ? "warning" : "outline"}
-              onClick={() => setAdoptionLevel("PARTIAL_MODIFY")}
+              onClick={() => {
+                setAdoptionLevel("PARTIAL_MODIFY");
+              }}
               className={
                 adoptionLevel === "PARTIAL_MODIFY"
                   ? "bg-yellow-600 hover:bg-yellow-700 text-white"
@@ -223,11 +234,19 @@ export default function ReviewPage({
             </Button>
             <Button
               variant={adoptionLevel === "FULL_REWRITE" ? "destructive" : "outline"}
-              onClick={() => setAdoptionLevel("FULL_REWRITE")}
+              onClick={() => {
+                setAdoptionLevel("FULL_REWRITE");
+                setHerbs([{ name: "", dosage: 9, unit: "g" }]);
+              }}
             >
               完全重写
             </Button>
           </div>
+          <p className="mt-2 text-xs text-gray-500">
+            {adoptionLevel === "ADOPT_ALL" && "已恢复AI推荐的原始药材"}
+            {adoptionLevel === "PARTIAL_MODIFY" && "可在下方直接编辑药材"}
+            {adoptionLevel === "FULL_REWRITE" && "已清空药材，请重新添加"}
+          </p>
         </CardContent>
       </Card>
 
