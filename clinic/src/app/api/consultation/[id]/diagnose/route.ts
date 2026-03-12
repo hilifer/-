@@ -153,6 +153,7 @@ export async function POST(
   // Build patient info for dosage adjustment
   const patientInfo: PatientInfo = {
     name: consultation.patientName || undefined,
+    gender: consultation.patientGender || undefined,
     age: consultation.patientAge,
     weight: consultation.patientWeight,
   };

@@ -33,6 +33,7 @@ interface ConsultationData {
   id: string;
   status: string;
   patientName?: string;
+  patientGender?: string;
   patientAge?: number | null;
   patientWeight?: number | null;
   diagnosis: DiagnosisData | null;
@@ -147,6 +148,9 @@ export default function DiagnosisPage({
             <CardContent>
               <div className="flex gap-6 text-gray-300">
                 <span>姓名：{consultation.patientName}</span>
+                {consultation.patientGender && (
+                  <span>性别：{consultation.patientGender === "MALE" ? "男" : "女"}</span>
+                )}
                 {consultation.patientAge && <span>年龄：{consultation.patientAge}岁</span>}
                 {consultation.patientWeight && <span>体重：{consultation.patientWeight}kg</span>}
               </div>

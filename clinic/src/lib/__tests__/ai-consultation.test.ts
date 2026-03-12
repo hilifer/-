@@ -174,8 +174,9 @@ describe("generateDiagnosis with patient info", () => {
   });
 
   it("should include patient note in reasoning when info provided", () => {
-    const result = generateDiagnosis(coldMessages, { name: "张三", age: 30, weight: 70 });
+    const result = generateDiagnosis(coldMessages, { name: "张三", gender: "MALE", age: 30, weight: 70 });
     expect(result.reasoning).toContain("张三");
+    expect(result.reasoning).toContain("男");
     expect(result.reasoning).toContain("30岁");
     expect(result.reasoning).toContain("70kg");
   });

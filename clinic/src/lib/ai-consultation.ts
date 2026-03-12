@@ -119,6 +119,7 @@ export function extractSymptoms(
 
 export interface PatientInfo {
   name?: string;
+  gender?: string; // MALE | FEMALE
   age?: number | null;
   weight?: number | null;
 }
@@ -310,8 +311,9 @@ export function generateDiagnosis(
       bestMatch.confidence * (0.5 + 0.5 * validRatio) * Math.min(1, bestScore / 3)
     );
     // Build patient info note for reasoning
-    const patientNote = patient?.age || patient?.weight
-      ? `（患者${patient.name || ""}${patient.age ? `，${patient.age}岁` : ""}${patient.weight ? `，体重${patient.weight}kg` : ""}，剂量已根据年龄体重调整。）`
+    const genderLabel = patient?.gender === "MALE" ? "男" : patient?.gender === "FEMALE" ? "女" : "";
+    const patientNote = patient?.age || patient?.weight || patient?.gender
+      ? `（患者${patient.name || ""}${genderLabel ? `，${genderLabel}` : ""}${patient.age ? `，${patient.age}岁` : ""}${patient.weight ? `，体重${patient.weight}kg` : ""}，剂量已根据年龄体重调整。）`
       : "";
     return {
       syndromeType: bestMatch.syndrome,

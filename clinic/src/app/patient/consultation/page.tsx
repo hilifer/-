@@ -64,6 +64,7 @@ export default function ConsultationPage() {
   const [error, setError] = useState("");
   // Patient info form
   const [patientName, setPatientName] = useState("");
+  const [patientGender, setPatientGender] = useState("");
   const [patientAge, setPatientAge] = useState("");
   const [patientWeight, setPatientWeight] = useState("");
   const maxRounds = 8;
@@ -96,6 +97,7 @@ export default function ConsultationPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           patientName: patientName.trim(),
+          patientGender: patientGender || undefined,
           patientAge: patientAge ? parseInt(patientAge, 10) : undefined,
           patientWeight: patientWeight ? parseFloat(patientWeight) : undefined,
         }),
@@ -354,6 +356,33 @@ export default function ConsultationPage() {
                 onChange={(e) => setPatientName(e.target.value)}
                 placeholder="请输入您的姓名"
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">性别</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPatientGender("MALE")}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    patientGender === "MALE"
+                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-400"
+                      : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
+                  }`}
+                >
+                  男
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPatientGender("FEMALE")}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    patientGender === "FEMALE"
+                      ? "border-emerald-500 bg-emerald-500/20 text-emerald-400"
+                      : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600"
+                  }`}
+                >
+                  女
+                </button>
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-sm text-gray-400">年龄</label>

@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const patientName = typeof body.patientName === "string" ? body.patientName.trim() : "";
+  const patientGender = body.patientGender === "MALE" || body.patientGender === "FEMALE" ? body.patientGender : "";
   const patientAge = typeof body.patientAge === "number" && body.patientAge > 0 && body.patientAge <= 150 ? Math.floor(body.patientAge) : null;
   const patientWeight = typeof body.patientWeight === "number" && body.patientWeight > 0 && body.patientWeight <= 500 ? body.patientWeight : null;
 
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest) {
     data: {
       patientId: session.user.id,
       patientName,
+      patientGender,
       patientAge,
       patientWeight,
     },

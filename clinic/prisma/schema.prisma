@@ -48,6 +48,7 @@ model Consultation {
   patientId      String
   patient        User          @relation(fields: [patientId], references: [id])
   patientName    String        @default("")
+  patientGender  String        @default("") // MALE | FEMALE
   patientAge     Int?
   patientWeight  Float?
   status         String        @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED | DIAGNOSED
