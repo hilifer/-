@@ -56,6 +56,7 @@ export default function DiagnosisPage({
   const router = useRouter();
   const [consultation, setConsultation] = useState<ConsultationData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -188,18 +189,22 @@ export default function DiagnosisPage({
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-3">
-                {consultation.images.map((img) => (
-                  <div key={img.id} className="text-center">
-                    <img
-                      src={`data:${img.mimeType};base64,${img.data}`}
-                      alt={IMAGE_TYPE_LABELS[img.type] || img.type}
-                      className="w-full h-28 object-cover rounded-lg border border-gray-700"
-                    />
-                    <span className="text-xs text-gray-400 mt-1 block">
-                      {IMAGE_TYPE_LABELS[img.type] || img.type}
-                    </span>
-                  </div>
-                ))}
+                {consultation.images.map((img) => {
+                  const src = `data:${img.mimeType};base64,${img.data}`;
+                  return (
+                    <div key={img.id} className="text-center">
+                      <img
+                        src={src}
+                        alt={IMAGE_TYPE_LABELS[img.type] || img.type}
+                        className="w-full h-28 object-cover rounded-lg border border-gray-700 cursor-pointer hover:border-emerald-500 transition-colors"
+                        onClick={() => setLightboxSrc(src)}
+                      />
+                      <span className="text-xs text-gray-400 mt-1 block">
+                        {IMAGE_TYPE_LABELS[img.type] || img.type}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -294,6 +299,27 @@ export default function DiagnosisPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Image lightbox */}
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white text-3xl hover:text-gray-300"
+            onClick={() => setLightboxSrc(null)}
+          >
+            ×
+          </button>
+          <img
+            src={lightboxSrc}
+            alt="放大查看"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
