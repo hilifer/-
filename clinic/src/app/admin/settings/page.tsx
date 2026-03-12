@@ -449,27 +449,51 @@ export default function AdminSettingsPage() {
                 <button
                   key={p.id}
                   onClick={() => {
-                    // Load saved provider config if available
-                    if (saved) {
+                    if (p.id === config.provider) return; // already selected
+
+                    // Save current provider config locally before switching
+                    const currentProviderSnapshot: ProviderSavedConfig = {
+                      model: config.model,
+                      apiKey: newApiKey || config.apiKey,
+                      hasApiKey: !!(newApiKey || config.hasApiKey),
+                      baseUrl: config.baseUrl,
+                      temperature: config.temperature,
+                      maxTokens: config.maxTokens,
+                      systemPrompt: config.systemPrompt,
+                      tested: config.providers?.[config.provider]?.tested ?? false,
+                    };
+                    const updatedProviders = {
+                      ...config.providers,
+                      [config.provider]: currentProviderSnapshot,
+                    };
+
+                    // Load target provider config
+                    const target = updatedProviders[p.id] || saved;
+                    if (target) {
                       setConfig({
                         ...config,
+                        providers: updatedProviders,
                         provider: p.id,
-                        model: saved.model || p.models[0] || config.model,
-                        baseUrl: saved.baseUrl || p.defaultBaseUrl || "",
-                        temperature: saved.temperature ?? config.temperature,
-                        maxTokens: saved.maxTokens ?? config.maxTokens,
-                        systemPrompt: saved.systemPrompt ?? config.systemPrompt,
-                        apiKey: saved.apiKey,
-                        hasApiKey: saved.hasApiKey,
+                        model: target.model || p.models[0] || config.model,
+                        baseUrl: target.baseUrl || p.defaultBaseUrl || "",
+                        temperature: target.temperature ?? config.temperature,
+                        maxTokens: target.maxTokens ?? config.maxTokens,
+                        systemPrompt: target.systemPrompt ?? config.systemPrompt,
+                        apiKey: target.apiKey,
+                        hasApiKey: target.hasApiKey,
                       });
                       setNewApiKey("");
                     } else {
                       setConfig({
                         ...config,
+                        providers: updatedProviders,
                         provider: p.id,
                         model: p.models[0] || config.model,
                         baseUrl: p.defaultBaseUrl || (p.id === "custom" ? config.baseUrl : ""),
+                        apiKey: "",
+                        hasApiKey: false,
                       });
+                      setNewApiKey("");
                     }
                   }}
                   className={`rounded-lg border px-4 py-3 text-left transition-colors ${
