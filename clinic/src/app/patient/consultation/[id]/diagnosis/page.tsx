@@ -85,19 +85,27 @@ export default function DiagnosisPage({
   }
 
   const { diagnosis, prescription } = consultation;
-  const herbs = JSON.parse(diagnosis.formulaHerbs) as {
-    name: string;
-    dosage: number;
-    unit: string;
-  }[];
+  const herbs = (() => {
+    try {
+      const parsed = JSON.parse(diagnosis.formulaHerbs);
+      return Array.isArray(parsed) ? parsed as { name: string; dosage: number; unit: string }[] : [];
+    } catch {
+      return [];
+    }
+  })();
   const warnings = prescription
-    ? (JSON.parse(prescription.safetyWarnings) as {
-        severity: string;
-        message: string;
-      }[])
+    ? (() => {
+        try {
+          const parsed = JSON.parse(prescription.safetyWarnings);
+          return Array.isArray(parsed) ? parsed as { severity: string; message: string }[] : [];
+        } catch {
+          return [];
+        }
+      })()
     : [];
 
   const confidencePercent = Math.round(diagnosis.confidence * 100);
+  const isInsufficient = diagnosis.confidence === 0 || herbs.length === 0;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -106,6 +114,26 @@ export default function DiagnosisPage({
       <h1 className="my-6 text-2xl font-bold text-emerald-400">AI辨证结果</h1>
 
       <div className="space-y-6">
+        {/* Insufficient info warning */}
+        {isInsufficient && (
+          <Card className="border-yellow-600">
+            <CardContent className="py-6 text-center">
+              <p className="text-yellow-400 text-lg font-medium mb-2">
+                问诊信息不足，无法生成可靠的辨证结果
+              </p>
+              <p className="text-gray-400 text-sm mb-4">
+                请重新进行问诊，详细描述您的症状、不适部位、持续时间等信息
+              </p>
+              <button
+                onClick={() => router.push("/patient/consultation")}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-500"
+              >
+                重新问诊
+              </button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Syndrome type */}
         <Card>
           <CardHeader>
@@ -117,15 +145,17 @@ export default function DiagnosisPage({
                     ? "default"
                     : confidencePercent >= 60
                       ? "warning"
-                      : "error"
+                      : confidencePercent > 0
+                        ? "error"
+                        : "error"
                 }
               >
-                置信度 {confidencePercent}%
+                {confidencePercent > 0 ? `置信度 ${confidencePercent}%` : "无法辨证"}
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-emerald-300">
+            <p className={`text-2xl font-bold ${isInsufficient ? "text-yellow-400" : "text-emerald-300"}`}>
               {diagnosis.syndromeType}
             </p>
           </CardContent>
@@ -166,40 +196,42 @@ export default function DiagnosisPage({
           </CardContent>
         </Card>
 
-        {/* Recommended formula */}
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              推荐方剂：
-              <span className="text-emerald-300">
-                {diagnosis.recommendedFormula}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-gray-700">
-                    <th className="pb-2 text-gray-400">药材</th>
-                    <th className="pb-2 text-gray-400">剂量</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {herbs.map((herb, i) => (
-                    <tr key={i} className="border-b border-gray-800">
-                      <td className="py-2 text-gray-200">{herb.name}</td>
-                      <td className="py-2 text-gray-300">
-                        {herb.dosage}
-                        {herb.unit}
-                      </td>
+        {/* Recommended formula — only show when herbs exist */}
+        {herbs.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                推荐方剂：
+                <span className="text-emerald-300">
+                  {diagnosis.recommendedFormula}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="pb-2 text-gray-400">药材</th>
+                      <th className="pb-2 text-gray-400">剂量</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {herbs.map((herb, i) => (
+                      <tr key={i} className="border-b border-gray-800">
+                        <td className="py-2 text-gray-200">{herb.name}</td>
+                        <td className="py-2 text-gray-300">
+                          {herb.dosage}
+                          {herb.unit}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Safety warnings */}
         {warnings.length > 0 && (
@@ -229,7 +261,11 @@ export default function DiagnosisPage({
         {/* Status notice */}
         <Card>
           <CardContent className="text-center py-4">
-            {prescription?.status === "SIGNED" ? (
+            {isInsufficient ? (
+              <p className="text-yellow-400">
+                问诊信息不足，未生成处方。请重新详细问诊后再获取诊断。
+              </p>
+            ) : prescription?.status === "SIGNED" ? (
               <p className="text-emerald-400">处方已由医生签发，请前往查看</p>
             ) : (
               <p className="text-yellow-400">

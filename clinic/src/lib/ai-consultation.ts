@@ -58,6 +58,47 @@ export function getNextQuestion(roundNumber: number): string {
   return flow.question;
 }
 
+// Common TCM symptom keywords for validating patient responses
+const SYMPTOM_KEYWORDS = [
+  // Pain & discomfort
+  "痛", "疼", "酸", "胀", "麻", "痒", "不适", "难受", "不舒服",
+  // Body parts
+  "头", "胸", "胃", "腹", "腰", "背", "腿", "肩", "颈", "眼", "耳", "鼻", "喉", "咽",
+  // Common symptoms
+  "咳嗽", "发热", "发烧", "恶寒", "怕冷", "怕热", "出汗", "盗汗",
+  "失眠", "多梦", "乏力", "疲倦", "头晕", "恶心", "呕吐",
+  "腹泻", "便秘", "食欲", "口干", "口苦", "口渴",
+  "鼻塞", "流涕", "气短", "心悸", "浮肿", "尿频",
+  // Descriptions
+  "好", "不好", "正常", "还行", "差", "多", "少", "没有",
+  "经常", "偶尔", "有时", "总是", "一直", "最近",
+  "冷", "热", "凉", "温", "干", "湿",
+  // Food & sleep & mood
+  "睡", "吃", "喝", "梦", "醒", "烦", "躁", "焦虑", "抑郁", "压力",
+  // History
+  "过敏", "高血压", "糖尿", "心脏", "手术", "药",
+  // Basic affirmation/negation
+  "是", "对", "没", "无", "不",
+  // Time
+  "天", "周", "月", "年", "小时",
+];
+
+/**
+ * Check if patient input contains meaningful medical content
+ * Returns true if the input seems valid enough to proceed
+ */
+export function isValidMedicalInput(input: string): boolean {
+  const trimmed = input.trim();
+  // Too short (less than 2 chars) — likely garbage
+  if (trimmed.length < 2) return false;
+  // Pure numbers — not useful
+  if (/^\d+$/.test(trimmed)) return false;
+  // Single repeated character
+  if (/^(.)\1+$/.test(trimmed)) return false;
+  // Check if it contains at least one symptom keyword
+  return SYMPTOM_KEYWORDS.some((kw) => trimmed.includes(kw));
+}
+
 export function extractSymptoms(
   userInput: string,
   roundNumber: number
@@ -67,8 +108,11 @@ export function extractSymptoms(
   if (!flow) return {};
 
   const extracted: Record<string, string> = {};
-  for (const key of flow.extractKeys) {
-    extracted[key] = userInput.trim();
+  // Only extract if the input seems medically meaningful
+  if (isValidMedicalInput(userInput)) {
+    for (const key of flow.extractKeys) {
+      extracted[key] = userInput.trim();
+    }
   }
   return extracted;
 }
@@ -80,7 +124,7 @@ export function generateDiagnosis(messages: ConversationMessage[]): {
   recommendedFormula: string;
   formulaHerbs: { name: string; dosage: number; unit: string }[];
 } {
-  // Collect all symptoms from conversation
+  // Collect all extracted symptoms from conversation
   const allInfo: Record<string, string> = {};
   for (const msg of messages) {
     if (msg.extractedInfo) {
@@ -88,24 +132,45 @@ export function generateDiagnosis(messages: ConversationMessage[]): {
     }
   }
 
-  const fullText = messages
-    .filter((m) => m.role === "USER")
-    .map((m) => m.content)
-    .join(" ");
+  // Count how many rounds had valid medical input
+  const userMessages = messages.filter((m) => m.role === "USER");
+  const validAnswers = userMessages.filter((m) => isValidMedicalInput(m.content));
+  const validRatio = userMessages.length > 0 ? validAnswers.length / userMessages.length : 0;
 
-  // Pattern matching for common syndromes (simplified)
-  if (
-    fullText.includes("怕冷") ||
-    fullText.includes("手脚冰凉") ||
-    fullText.includes("腰酸")
-  ) {
+  // If less than 30% of answers are valid, refuse to diagnose
+  if (validRatio < 0.3 || validAnswers.length < 2) {
     return {
-      syndromeType: "肾阳虚证",
-      confidence: 0.78,
+      syndromeType: "信息不足，无法辨证",
+      confidence: 0,
       reasoning:
-        "患者表现为畏寒肢冷、腰膝酸软，结合四诊信息，辨证为肾阳虚证。肾阳不足，温煦失职，故见畏寒肢冷；腰为肾之府，肾虚则腰膝酸软。",
-      recommendedFormula: "金匮肾气丸",
-      formulaHerbs: [
+        "患者提供的问诊信息不足或无效，无法进行可靠的辨证分析。" +
+        `共${userMessages.length}轮回答中仅${validAnswers.length}轮包含有效症状描述。` +
+        "建议重新问诊，请患者详细描述症状。",
+      recommendedFormula: "无",
+      formulaHerbs: [],
+    };
+  }
+
+  const fullText = validAnswers.map((m) => m.content).join(" ");
+
+  // Count matching symptom patterns for confidence scoring
+  const patterns: {
+    name: string;
+    keywords: string[];
+    syndrome: string;
+    confidence: number;
+    reasoning: string;
+    formula: string;
+    herbs: { name: string; dosage: number; unit: string }[];
+  }[] = [
+    {
+      name: "kidney_yang",
+      keywords: ["怕冷", "手脚冰凉", "腰酸", "腰痛", "夜尿", "畏寒", "肢冷"],
+      syndrome: "肾阳虚证",
+      confidence: 0.78,
+      reasoning: "患者表现为畏寒肢冷、腰膝酸软，结合四诊信息，辨证为肾阳虚证。肾阳不足，温煦失职，故见畏寒肢冷；腰为肾之府，肾虚则腰膝酸软。",
+      formula: "金匮肾气丸",
+      herbs: [
         { name: "熟地黄", dosage: 24, unit: "g" },
         { name: "山药", dosage: 12, unit: "g" },
         { name: "山茱萸", dosage: 12, unit: "g" },
@@ -115,21 +180,15 @@ export function generateDiagnosis(messages: ConversationMessage[]): {
         { name: "桂枝", dosage: 3, unit: "g" },
         { name: "附子", dosage: 3, unit: "g" },
       ],
-    };
-  }
-
-  if (
-    fullText.includes("失眠") ||
-    fullText.includes("心烦") ||
-    fullText.includes("口干")
-  ) {
-    return {
-      syndromeType: "心阴虚证",
+    },
+    {
+      name: "heart_yin",
+      keywords: ["失眠", "心烦", "口干", "多梦", "盗汗", "心悸", "健忘"],
+      syndrome: "心阴虚证",
       confidence: 0.82,
-      reasoning:
-        "患者以失眠心烦、口干为主要表现，辨证为心阴虚证。心阴不足，虚火内扰心神，故见失眠多梦、心烦不安；阴虚津少，故口干。",
-      recommendedFormula: "天王补心丹",
-      formulaHerbs: [
+      reasoning: "患者以失眠心烦、口干为主要表现，辨证为心阴虚证。心阴不足，虚火内扰心神，故见失眠多梦、心烦不安；阴虚津少，故口干。",
+      formula: "天王补心丹",
+      herbs: [
         { name: "生地黄", dosage: 15, unit: "g" },
         { name: "人参", dosage: 6, unit: "g" },
         { name: "丹参", dosage: 6, unit: "g" },
@@ -144,67 +203,105 @@ export function generateDiagnosis(messages: ConversationMessage[]): {
         { name: "当归", dosage: 9, unit: "g" },
         { name: "五味子", dosage: 6, unit: "g" },
       ],
-    };
-  }
-
-  if (
-    fullText.includes("头痛") ||
-    fullText.includes("鼻塞") ||
-    fullText.includes("咳嗽") ||
-    fullText.includes("发热")
-  ) {
-    return {
-      syndromeType: "风寒表证",
+    },
+    {
+      name: "wind_cold",
+      keywords: ["头痛", "鼻塞", "咳嗽", "发热", "发烧", "恶寒", "流涕", "打喷嚏"],
+      syndrome: "风寒表证",
       confidence: 0.85,
-      reasoning:
-        "患者以头痛、恶寒、鼻塞等为主诉，辨证为风寒表证。风寒外袭，卫阳被遏，故见恶寒发热、头痛；肺气失宣，故鼻塞咳嗽。",
-      recommendedFormula: "麻黄汤",
-      formulaHerbs: [
+      reasoning: "患者以头痛、恶寒、鼻塞等为主诉，辨证为风寒表证。风寒外袭，卫阳被遏，故见恶寒发热、头痛；肺气失宣，故鼻塞咳嗽。",
+      formula: "麻黄汤",
+      herbs: [
         { name: "麻黄", dosage: 9, unit: "g" },
         { name: "桂枝", dosage: 6, unit: "g" },
         { name: "杏仁", dosage: 9, unit: "g" },
         { name: "甘草", dosage: 3, unit: "g" },
       ],
-    };
-  }
-
-  if (
-    fullText.includes("胃痛") ||
-    fullText.includes("腹胀") ||
-    fullText.includes("食欲不振")
-  ) {
-    return {
-      syndromeType: "脾胃气虚证",
+    },
+    {
+      name: "spleen_qi",
+      keywords: ["胃痛", "腹胀", "食欲不振", "不想吃", "消化不良", "腹泻", "便溏", "乏力"],
+      syndrome: "脾胃气虚证",
       confidence: 0.80,
-      reasoning:
-        "患者以胃脘不适、食欲不振、腹胀为主诉，辨证为脾胃气虚证。脾胃气虚，运化失常，故见食欲不振、腹胀；中气不足，故倦怠乏力。",
-      recommendedFormula: "四君子汤",
-      formulaHerbs: [
+      reasoning: "患者以胃脘不适、食欲不振、腹胀为主诉，辨证为脾胃气虚证。脾胃气虚，运化失常，故见食欲不振、腹胀；中气不足，故倦怠乏力。",
+      formula: "四君子汤",
+      herbs: [
         { name: "人参", dosage: 9, unit: "g" },
         { name: "白术", dosage: 9, unit: "g" },
         { name: "茯苓", dosage: 9, unit: "g" },
         { name: "甘草", dosage: 6, unit: "g" },
       ],
+    },
+    {
+      name: "liver_qi",
+      keywords: ["烦躁", "易怒", "胁痛", "胸闷", "叹气", "压力大", "焦虑", "抑郁", "情绪"],
+      syndrome: "肝气郁结证",
+      confidence: 0.77,
+      reasoning: "患者以情志不畅、胸胁胀闷为主诉，辨证为肝气郁结证。肝失疏泄，气机郁滞，故见胸胁胀痛、烦躁易怒；气郁日久，可致脾胃不和。",
+      formula: "逍遥散",
+      herbs: [
+        { name: "柴胡", dosage: 9, unit: "g" },
+        { name: "当归", dosage: 9, unit: "g" },
+        { name: "白芍", dosage: 12, unit: "g" },
+        { name: "白术", dosage: 9, unit: "g" },
+        { name: "茯苓", dosage: 9, unit: "g" },
+        { name: "甘草", dosage: 6, unit: "g" },
+        { name: "薄荷", dosage: 3, unit: "g" },
+        { name: "生姜", dosage: 3, unit: "g" },
+      ],
+    },
+  ];
+
+  // Score each pattern by number of matching keywords
+  let bestMatch: typeof patterns[0] | null = null;
+  let bestScore = 0;
+
+  for (const p of patterns) {
+    const score = p.keywords.filter((kw) => fullText.includes(kw)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = p;
+    }
+  }
+
+  // Need at least 2 keyword matches for a credible diagnosis
+  if (bestMatch && bestScore >= 2) {
+    // Adjust confidence based on match quality and valid answer ratio
+    const adjustedConfidence = Math.min(
+      bestMatch.confidence,
+      bestMatch.confidence * (0.5 + 0.5 * validRatio) * Math.min(1, bestScore / 3)
+    );
+    return {
+      syndromeType: bestMatch.syndrome,
+      confidence: Math.round(adjustedConfidence * 100) / 100,
+      reasoning: bestMatch.reasoning,
+      recommendedFormula: bestMatch.formula,
+      formulaHerbs: bestMatch.herbs,
     };
   }
 
-  // Default fallback
+  // Single keyword match — low confidence, provide tentative result with warning
+  if (bestMatch && bestScore === 1) {
+    return {
+      syndromeType: bestMatch.syndrome + "（待确认）",
+      confidence: 0.35,
+      reasoning:
+        `仅匹配到少量症状特征，辨证把握度较低。${bestMatch.reasoning} ` +
+        "建议医生结合面诊进一步确认，必要时重新问诊收集更多四诊信息。",
+      recommendedFormula: bestMatch.formula,
+      formulaHerbs: bestMatch.herbs,
+    };
+  }
+
+  // No pattern match at all — refuse to prescribe
   return {
-    syndromeType: "气血两虚证",
-    confidence: 0.65,
+    syndromeType: "信息不足，无法辨证",
+    confidence: 0,
     reasoning:
-      "根据患者描述的综合症状，初步辨证为气血两虚证。建议进一步面诊确认。气血不足，脏腑失养，可见多种不适症状。",
-    recommendedFormula: "八珍汤",
-    formulaHerbs: [
-      { name: "人参", dosage: 9, unit: "g" },
-      { name: "白术", dosage: 9, unit: "g" },
-      { name: "茯苓", dosage: 9, unit: "g" },
-      { name: "甘草", dosage: 6, unit: "g" },
-      { name: "当归", dosage: 9, unit: "g" },
-      { name: "川芎", dosage: 6, unit: "g" },
-      { name: "白芍", dosage: 9, unit: "g" },
-      { name: "熟地黄", dosage: 12, unit: "g" },
-    ],
+      "根据患者提供的信息，未能识别出明确的证型特征，无法进行可靠的辨证分析。" +
+      "建议重新进行详细问诊，请患者具体描述不适症状、部位、时间等信息。",
+    recommendedFormula: "无",
+    formulaHerbs: [],
   };
 }
 
