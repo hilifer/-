@@ -143,8 +143,7 @@ async function main() {
   console.log("Seeding database...");
 
   // Create demo users
-  const patientHash = await bcrypt.hash("123456", 12);
-  const doctorHash = await bcrypt.hash("123456", 12);
+  const passwordHash = await bcrypt.hash("123456", 12);
 
   await prisma.user.upsert({
     where: { phone: "13800000001" },
@@ -152,7 +151,7 @@ async function main() {
     create: {
       name: "张三",
       phone: "13800000001",
-      passwordHash: patientHash,
+      passwordHash,
       role: "PATIENT",
     },
   });
@@ -163,12 +162,41 @@ async function main() {
     create: {
       name: "李医生",
       phone: "13800000002",
-      passwordHash: doctorHash,
+      passwordHash,
       role: "DOCTOR",
     },
   });
 
-  console.log("Created demo users");
+  await prisma.user.upsert({
+    where: { phone: "13800000000" },
+    update: {},
+    create: {
+      name: "管理员",
+      phone: "13800000000",
+      passwordHash,
+      role: "ADMIN",
+    },
+  });
+
+  console.log("Created demo users (patient, doctor, admin)");
+
+  // Seed default AI config
+  await prisma.aiConfig.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: {
+      id: "singleton",
+      enabled: false,
+      provider: "openai",
+      model: "gpt-4o",
+      apiKey: "",
+      baseUrl: "",
+      temperature: 0.7,
+      maxTokens: 2048,
+      systemPrompt: "",
+    },
+  });
+  console.log("Created default AI config (disabled)");
 
   // Seed herbs
   for (const herb of HERBS) {
@@ -189,6 +217,7 @@ async function main() {
 
   console.log("Seeding complete!");
   console.log("\nDemo accounts:");
+  console.log("  Admin:   13800000000 / 123456");
   console.log("  Patient: 13800000001 / 123456");
   console.log("  Doctor:  13800000002 / 123456");
 }

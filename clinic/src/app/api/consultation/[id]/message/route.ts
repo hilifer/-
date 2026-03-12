@@ -7,6 +7,55 @@ import {
   extractSymptoms,
   MAX_ROUNDS,
 } from "@/lib/ai-consultation";
+import { isLLMEnabled, callLLM, getAiConfig } from "@/lib/llm-service";
+
+const DEFAULT_SYSTEM_PROMPT = `你是一位经验丰富的中医师AI助手，正在进行中医问诊。请通过多轮对话收集患者的四诊信息。
+
+问诊规则：
+1. 每次只问1-2个问题，循序渐进
+2. 按以下顺序依次询问：主诉与病程 → 症状性质 → 饮食口感 → 睡眠 → 二便 → 情志 → 既往史与用药 → 寒热汗出
+3. 使用通俗易懂的中文与患者交流
+4. 8轮问答后结束问诊，回复"感谢您的详细描述，我已收集到足够的四诊信息。现在为您进行辨证分析，请稍候..."
+5. 回答要专业且亲切
+6. 当前是第{round}轮问诊，共8轮`;
+
+async function generateLLMResponse(
+  consultationId: string,
+  currentRound: number
+): Promise<{ content: string; isComplete: boolean }> {
+  const config = await getAiConfig();
+  const systemPrompt = (config.systemPrompt || DEFAULT_SYSTEM_PROMPT)
+    .replace("{round}", String(currentRound));
+
+  // Load full conversation history
+  const allMessages = await prisma.message.findMany({
+    where: { consultationId },
+    orderBy: { roundNumber: "asc" },
+  });
+
+  const chatMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
+    { role: "system", content: systemPrompt },
+  ];
+
+  for (const msg of allMessages) {
+    chatMessages.push({
+      role: msg.role === "USER" ? "user" : "assistant",
+      content: msg.content,
+    });
+  }
+
+  const isComplete = currentRound >= MAX_ROUNDS;
+
+  if (isComplete) {
+    return {
+      content: "感谢您的详细描述，我已收集到足够的四诊信息。现在为您进行辨证分析，请稍候...",
+      isComplete: true,
+    };
+  }
+
+  const reply = await callLLM(chatMessages);
+  return { content: reply, isComplete: false };
+}
 
 export async function POST(
   req: NextRequest,
@@ -49,12 +98,31 @@ export async function POST(
     },
   });
 
-  // Generate AI response
-  const nextRound = currentRound + 1;
-  const isComplete = nextRound > MAX_ROUNDS;
-  const aiContent = isComplete
-    ? "感谢您的详细描述，我已收集到足够的四诊信息。现在为您进行辨证分析，请稍候..."
-    : getNextQuestion(nextRound);
+  // Generate AI response - use LLM if enabled, otherwise fall back to rules
+  const llmEnabled = await isLLMEnabled();
+  let aiContent: string;
+  let isComplete: boolean;
+
+  if (llmEnabled) {
+    try {
+      const result = await generateLLMResponse(id, currentRound + 1);
+      aiContent = result.content;
+      isComplete = result.isComplete;
+    } catch (err) {
+      console.error("LLM call failed, falling back to rules:", err);
+      const nextRound = currentRound + 1;
+      isComplete = nextRound > MAX_ROUNDS;
+      aiContent = isComplete
+        ? "感谢您的详细描述，我已收集到足够的四诊信息。现在为您进行辨证分析，请稍候..."
+        : getNextQuestion(nextRound);
+    }
+  } else {
+    const nextRound = currentRound + 1;
+    isComplete = nextRound > MAX_ROUNDS;
+    aiContent = isComplete
+      ? "感谢您的详细描述，我已收集到足够的四诊信息。现在为您进行辨证分析，请稍候..."
+      : getNextQuestion(nextRound);
+  }
 
   await prisma.message.create({
     data: {
@@ -75,7 +143,7 @@ export async function POST(
   return NextResponse.json({
     aiMessage: aiContent,
     isComplete,
-    currentRound: nextRound,
+    currentRound: currentRound + 1,
   });
 }
 

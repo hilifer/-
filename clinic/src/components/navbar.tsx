@@ -40,14 +40,21 @@ export function Navbar() {
           )}
 
           {isDoctor && (
-            <>
-              <Link
-                href="/doctor/patients"
-                className="text-gray-300 hover:text-emerald-400 transition-colors"
-              >
-                待审患者
-              </Link>
-            </>
+            <Link
+              href="/doctor/patients"
+              className="text-gray-300 hover:text-emerald-400 transition-colors"
+            >
+              待审患者
+            </Link>
+          )}
+
+          {isAdmin && (
+            <Link
+              href="/admin/settings"
+              className="text-gray-300 hover:text-emerald-400 transition-colors"
+            >
+              AI设置
+            </Link>
           )}
 
           <span className="text-sm text-gray-500">
