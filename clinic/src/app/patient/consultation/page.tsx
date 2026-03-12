@@ -89,6 +89,29 @@ export default function ConsultationPage() {
     setDiagnosing(false);
   };
 
+  // Skip remaining rounds and go to diagnosis
+  const skipToDiagnosis = async () => {
+    if (!consultationId) return;
+    setLoading(true);
+
+    // Tell backend to mark consultation as completed
+    const res = await fetch(`/api/consultation/${consultationId}/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "", skip: true }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        { role: "ASSISTANT", content: data.aiMessage },
+      ]);
+      setIsComplete(true);
+    }
+    setLoading(false);
+  };
+
   if (status === "loading") {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -133,7 +156,8 @@ export default function ConsultationPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsComplete(true)}
+                  onClick={skipToDiagnosis}
+                  disabled={loading}
                   className="text-xs whitespace-nowrap"
                 >
                   跳过，直接诊断

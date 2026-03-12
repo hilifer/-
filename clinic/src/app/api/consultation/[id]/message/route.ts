@@ -78,7 +78,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  const { content } = await req.json();
+  const { content, skip } = await req.json();
 
   const consultation = await prisma.consultation.findUnique({
     where: { id },
@@ -91,6 +91,23 @@ export async function POST(
 
   if (consultation.status !== "IN_PROGRESS") {
     return NextResponse.json({ error: "问诊已结束" }, { status: 400 });
+  }
+
+  // Handle skip: mark consultation as completed and return immediately
+  if (skip) {
+    const lastRound = consultation.messages[0]?.roundNumber || 0;
+    const completedRound = Math.ceil((lastRound + 1) / 2);
+
+    await prisma.consultation.update({
+      where: { id },
+      data: { status: "COMPLETED" },
+    });
+
+    return NextResponse.json({
+      aiMessage: "已跳过剩余问诊，您可以直接获取辨证结果。",
+      isComplete: true,
+      currentRound: completedRound,
+    });
   }
 
   const lastRound = consultation.messages[0]?.roundNumber || 0;
