@@ -152,29 +152,37 @@ export async function POST(
     result = generateDiagnosis(messages);
   }
 
-  // Save diagnosis
-  const diagnosis = await prisma.diagnosis.create({
-    data: {
-      consultationId: id,
-      syndromeType: result.syndromeType,
-      confidence: result.confidence,
-      reasoning: result.reasoning,
-      recommendedFormula: result.recommendedFormula,
-      formulaHerbs: JSON.stringify(result.formulaHerbs),
-    },
+  // Save diagnosis (upsert: allow re-diagnosis for same consultation)
+  const diagnosisData = {
+    syndromeType: result.syndromeType,
+    confidence: result.confidence,
+    reasoning: result.reasoning,
+    recommendedFormula: result.recommendedFormula,
+    formulaHerbs: JSON.stringify(result.formulaHerbs),
+  };
+  const diagnosis = await prisma.diagnosis.upsert({
+    where: { consultationId: id },
+    create: { consultationId: id, ...diagnosisData },
+    update: diagnosisData,
   });
 
   // Run safety check on recommended herbs
   const safetyWarnings = checkPrescriptionSafety(result.formulaHerbs);
 
-  // Create draft prescription
-  await prisma.prescription.create({
-    data: {
+  // Save draft prescription (upsert: allow re-diagnosis)
+  const prescriptionData = {
+    herbs: JSON.stringify(result.formulaHerbs),
+    safetyWarnings: JSON.stringify(safetyWarnings),
+    status: "DRAFT",
+  };
+  await prisma.prescription.upsert({
+    where: { consultationId: id },
+    create: {
       consultationId: id,
       patientId: consultation.patientId,
-      herbs: JSON.stringify(result.formulaHerbs),
-      safetyWarnings: JSON.stringify(safetyWarnings),
+      ...prescriptionData,
     },
+    update: prescriptionData,
   });
 
   // Update consultation status
