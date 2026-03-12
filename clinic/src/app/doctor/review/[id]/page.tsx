@@ -146,6 +146,22 @@ export default function ReviewPage({
 
       <h1 className="my-6 text-2xl font-bold text-emerald-400">处方审核</h1>
 
+      {/* Patient info */}
+      {(consultation.patientName || consultation.patientAge || consultation.patientWeight) && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>患者信息</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-6 text-gray-300">
+              {consultation.patientName && <span>姓名：{consultation.patientName}</span>}
+              {consultation.patientAge && <span>年龄：{consultation.patientAge}岁</span>}
+              {consultation.patientWeight && <span>体重：{consultation.patientWeight}kg</span>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Diagnosis summary */}
       {diagnosis && (
         <Card className="mb-6">

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateDiagnosis } from "@/lib/ai-consultation";
+import { generateDiagnosis, PatientInfo } from "@/lib/ai-consultation";
 import { checkPrescriptionSafety } from "@/lib/safety-check";
 import { isLLMEnabled, callLLM, callLLMWithImages, getAiConfig } from "@/lib/llm-service";
 import type { ImageInput } from "@/lib/llm-service";
@@ -150,6 +150,13 @@ export async function POST(
     mimeType: img.mimeType,
   }));
 
+  // Build patient info for dosage adjustment
+  const patientInfo: PatientInfo = {
+    name: consultation.patientName || undefined,
+    age: consultation.patientAge,
+    weight: consultation.patientWeight,
+  };
+
   // Use LLM if enabled, otherwise fall back to rule-based engine
   let result: DiagnosisResult;
   const llmEnabled = await isLLMEnabled();
@@ -159,10 +166,10 @@ export async function POST(
       result = await generateLLMDiagnosis(messages, imageInputs);
     } catch (err) {
       console.error("LLM diagnosis failed, falling back to rules:", err);
-      result = generateDiagnosis(messages);
+      result = generateDiagnosis(messages, patientInfo);
     }
   } else {
-    result = generateDiagnosis(messages);
+    result = generateDiagnosis(messages, patientInfo);
   }
 
   const hasValidPrescription = result.formulaHerbs.length > 0 && result.confidence > 0;

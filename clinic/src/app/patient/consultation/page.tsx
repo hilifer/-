@@ -62,6 +62,10 @@ export default function ConsultationPage() {
   const [diagnosing, setDiagnosing] = useState(false);
   const [currentRound, setCurrentRound] = useState(0);
   const [error, setError] = useState("");
+  // Patient info form
+  const [patientName, setPatientName] = useState("");
+  const [patientAge, setPatientAge] = useState("");
+  const [patientWeight, setPatientWeight] = useState("");
   const maxRounds = 8;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -80,10 +84,22 @@ export default function ConsultationPage() {
   }, [status, router]);
 
   const startConsultation = async () => {
+    if (!patientName.trim()) {
+      setError("请填写姓名");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/consultation", { method: "POST" });
+      const res = await fetch("/api/consultation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientName: patientName.trim(),
+          patientAge: patientAge ? parseInt(patientAge, 10) : undefined,
+          patientWeight: patientWeight ? parseFloat(patientWeight) : undefined,
+        }),
+      });
       if (!res.ok) throw new Error("创建问诊失败");
       const data = await res.json();
       setConsultationId(data.id);
@@ -324,13 +340,53 @@ export default function ConsultationPage() {
       )}
 
       {!consultationId ? (
-        <Card className="text-center py-12">
-          <p className="mb-6 text-gray-400">
-            开始AI问诊，系统将通过8轮对话收集您的症状信息
+        <Card className="py-8 px-6">
+          <p className="mb-6 text-center text-gray-400">
+            请先填写基本信息，系统将通过8轮对话收集您的症状信息
           </p>
-          <Button onClick={startConsultation} disabled={loading} size="lg">
-            {loading ? "正在初始化..." : "开始问诊"}
-          </Button>
+          <div className="mx-auto max-w-sm space-y-4">
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">
+                姓名 <span className="text-red-400">*</span>
+              </label>
+              <Input
+                value={patientName}
+                onChange={(e) => setPatientName(e.target.value)}
+                placeholder="请输入您的姓名"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">年龄</label>
+              <Input
+                type="number"
+                value={patientAge}
+                onChange={(e) => setPatientAge(e.target.value)}
+                placeholder="请输入年龄（岁）"
+                min="1"
+                max="150"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">体重</label>
+              <Input
+                type="number"
+                value={patientWeight}
+                onChange={(e) => setPatientWeight(e.target.value)}
+                placeholder="请输入体重（kg）"
+                min="1"
+                max="500"
+                step="0.1"
+              />
+            </div>
+            <Button
+              onClick={startConsultation}
+              disabled={loading || !patientName.trim()}
+              size="lg"
+              className="w-full"
+            >
+              {loading ? "正在初始化..." : "开始问诊"}
+            </Button>
+          </div>
         </Card>
       ) : (
         <div className="flex flex-col h-[70vh]">

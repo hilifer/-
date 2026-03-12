@@ -143,6 +143,50 @@ describe("generateDiagnosis", () => {
   });
 });
 
+describe("generateDiagnosis with patient info", () => {
+  const coldMessages = [
+    { role: "USER" as const, content: "我头痛发热鼻塞" },
+    { role: "USER" as const, content: "咳嗽流涕怕冷" },
+  ];
+
+  it("should reduce dosage for children", () => {
+    const adult = generateDiagnosis(coldMessages);
+    const child = generateDiagnosis(coldMessages, { age: 5 });
+    // Child (age 5) should get ~33% of adult dose
+    const adultDose = adult.formulaHerbs[0].dosage;
+    const childDose = child.formulaHerbs[0].dosage;
+    expect(childDose).toBeLessThan(adultDose);
+    expect(childDose).toBeCloseTo(adultDose * 0.33, 0);
+  });
+
+  it("should reduce dosage for elderly", () => {
+    const adult = generateDiagnosis(coldMessages);
+    const elderly = generateDiagnosis(coldMessages, { age: 75 });
+    expect(elderly.formulaHerbs[0].dosage).toBeLessThan(adult.formulaHerbs[0].dosage);
+  });
+
+  it("should adjust dosage for body weight", () => {
+    const standard = generateDiagnosis(coldMessages);
+    const heavy = generateDiagnosis(coldMessages, { weight: 90 });
+    const light = generateDiagnosis(coldMessages, { weight: 40 });
+    expect(heavy.formulaHerbs[0].dosage).toBeGreaterThan(standard.formulaHerbs[0].dosage);
+    expect(light.formulaHerbs[0].dosage).toBeLessThan(standard.formulaHerbs[0].dosage);
+  });
+
+  it("should include patient note in reasoning when info provided", () => {
+    const result = generateDiagnosis(coldMessages, { name: "张三", age: 30, weight: 70 });
+    expect(result.reasoning).toContain("张三");
+    expect(result.reasoning).toContain("30岁");
+    expect(result.reasoning).toContain("70kg");
+  });
+
+  it("should keep standard dosage when no patient info given", () => {
+    const withoutInfo = generateDiagnosis(coldMessages);
+    const withInfo = generateDiagnosis(coldMessages, {});
+    expect(withoutInfo.formulaHerbs[0].dosage).toBe(withInfo.formulaHerbs[0].dosage);
+  });
+});
+
 describe("MAX_ROUNDS", () => {
   it("should be 8", () => {
     expect(MAX_ROUNDS).toBe(8);

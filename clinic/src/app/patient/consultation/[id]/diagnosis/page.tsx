@@ -32,6 +32,9 @@ interface ImageData {
 interface ConsultationData {
   id: string;
   status: string;
+  patientName?: string;
+  patientAge?: number | null;
+  patientWeight?: number | null;
   diagnosis: DiagnosisData | null;
   prescription: PrescriptionData | null;
   images?: ImageData[];
@@ -130,6 +133,22 @@ export default function DiagnosisPage({
               >
                 重新问诊
               </button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Patient info */}
+        {consultation.patientName && (
+          <Card>
+            <CardHeader>
+              <CardTitle>患者信息</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-6 text-gray-300">
+                <span>姓名：{consultation.patientName}</span>
+                {consultation.patientAge && <span>年龄：{consultation.patientAge}岁</span>}
+                {consultation.patientWeight && <span>体重：{consultation.patientWeight}kg</span>}
+              </div>
             </CardContent>
           </Card>
         )}

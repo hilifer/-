@@ -117,7 +117,45 @@ export function extractSymptoms(
   return extracted;
 }
 
-export function generateDiagnosis(messages: ConversationMessage[]): {
+export interface PatientInfo {
+  name?: string;
+  age?: number | null;
+  weight?: number | null;
+}
+
+// Adjust herb dosage based on patient age and weight
+// Standard dosage is for adults (18-60 years, ~60kg)
+function adjustDosage(
+  baseDosage: number,
+  patient?: PatientInfo
+): number {
+  let ratio = 1.0;
+
+  if (patient?.age) {
+    if (patient.age <= 3) ratio *= 0.25;
+    else if (patient.age <= 6) ratio *= 0.33;
+    else if (patient.age <= 9) ratio *= 0.5;
+    else if (patient.age <= 14) ratio *= 0.67;
+    else if (patient.age <= 17) ratio *= 0.83;
+    else if (patient.age >= 70) ratio *= 0.75;
+    // 18-69: standard dose (1.0)
+  }
+
+  if (patient?.weight) {
+    // Adjust relative to 60kg standard
+    const weightRatio = patient.weight / 60;
+    // Clamp between 0.7x and 1.3x to avoid extreme adjustments
+    ratio *= Math.max(0.7, Math.min(1.3, weightRatio));
+  }
+
+  // Round to 1 decimal place
+  return Math.round(baseDosage * ratio * 10) / 10;
+}
+
+export function generateDiagnosis(
+  messages: ConversationMessage[],
+  patient?: PatientInfo
+): {
   syndromeType: string;
   confidence: number;
   reasoning: string;
@@ -271,12 +309,19 @@ export function generateDiagnosis(messages: ConversationMessage[]): {
       bestMatch.confidence,
       bestMatch.confidence * (0.5 + 0.5 * validRatio) * Math.min(1, bestScore / 3)
     );
+    // Build patient info note for reasoning
+    const patientNote = patient?.age || patient?.weight
+      ? `（患者${patient.name || ""}${patient.age ? `，${patient.age}岁` : ""}${patient.weight ? `，体重${patient.weight}kg` : ""}，剂量已根据年龄体重调整。）`
+      : "";
     return {
       syndromeType: bestMatch.syndrome,
       confidence: Math.round(adjustedConfidence * 100) / 100,
-      reasoning: bestMatch.reasoning,
+      reasoning: bestMatch.reasoning + patientNote,
       recommendedFormula: bestMatch.formula,
-      formulaHerbs: bestMatch.herbs,
+      formulaHerbs: bestMatch.herbs.map((h) => ({
+        ...h,
+        dosage: adjustDosage(h.dosage, patient),
+      })),
     };
   }
 
@@ -289,7 +334,10 @@ export function generateDiagnosis(messages: ConversationMessage[]): {
         `仅匹配到少量症状特征，辨证把握度较低。${bestMatch.reasoning} ` +
         "建议医生结合面诊进一步确认，必要时重新问诊收集更多四诊信息。",
       recommendedFormula: bestMatch.formula,
-      formulaHerbs: bestMatch.herbs,
+      formulaHerbs: bestMatch.herbs.map((h) => ({
+        ...h,
+        dosage: adjustDosage(h.dosage, patient),
+      })),
     };
   }
 
