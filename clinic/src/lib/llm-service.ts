@@ -269,6 +269,191 @@ export async function callLLM(messages: ChatMessage[]): Promise<string> {
   }
 }
 
+// Image data for multimodal requests
+export interface ImageInput {
+  type: string; // TONGUE | FACE | FINGER
+  data: string; // base64 encoded
+  mimeType: string;
+}
+
+const IMAGE_TYPE_LABELS: Record<string, string> = {
+  TONGUE: "舌诊照片",
+  FACE: "面诊照片",
+  FINGER: "指纹照片",
+};
+
+// Call LLM with images (vision API) — used for diagnosis with uploaded photos
+export async function callLLMWithImages(
+  messages: ChatMessage[],
+  images: ImageInput[]
+): Promise<string> {
+  const config = await getAiConfig();
+
+  if (!config.enabled) throw new Error("AI 大模型未启用");
+  if (!config.apiKey) throw new Error("未配置 API Key");
+
+  if (config.systemPrompt && !messages.some((m) => m.role === "system")) {
+    messages = [{ role: "system", content: config.systemPrompt }, ...messages];
+  }
+
+  const spec = getProviderSpec(config.provider);
+
+  if (spec.apiFormat === "anthropic") {
+    return callAnthropicWithImages(messages, images, config, spec);
+  }
+  return callOpenAIWithImages(messages, images, config, spec);
+}
+
+// OpenAI vision format: content array with text + image_url items
+async function callOpenAIWithImages(
+  messages: ChatMessage[],
+  images: ImageInput[],
+  config: AiConfigData,
+  spec: ProviderSpec
+): Promise<string> {
+  const baseUrl = getBaseUrl(config);
+  const url = `${baseUrl}${spec.chatPath}`;
+  const headers = buildHeaders(config, spec);
+  const params = sanitizeParams(config);
+
+  // Build multimodal content for the last user message
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const apiMessages: any[] = messages.map((m) => {
+    if (m.role === "user") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const content: any[] = [{ type: "text", text: m.content }];
+      return { role: m.role, content };
+    }
+    return { role: m.role, content: m.content };
+  });
+
+  // Append images to the last user message
+  const lastUserIdx = apiMessages.findLastIndex(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (m: any) => m.role === "user"
+  );
+  if (lastUserIdx >= 0 && images.length > 0) {
+    const lastUser = apiMessages[lastUserIdx];
+    // Ensure content is array
+    if (typeof lastUser.content === "string") {
+      lastUser.content = [{ type: "text", text: lastUser.content }];
+    }
+    for (const img of images) {
+      lastUser.content.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${img.mimeType};base64,${img.data}`,
+          detail: "high",
+        },
+      });
+      lastUser.content.push({
+        type: "text",
+        text: `[${IMAGE_TYPE_LABELS[img.type] || img.type}]`,
+      });
+    }
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: config.model,
+      messages: apiMessages,
+      ...params,
+    }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(
+      `[${config.provider}] Vision API 调用失败 (${res.status})\n` +
+      `请求地址: ${url}\n` +
+      `模型: ${config.model}\n` +
+      `响应: ${errBody}`
+    );
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
+// Anthropic vision format: content array with text + image items
+async function callAnthropicWithImages(
+  messages: ChatMessage[],
+  images: ImageInput[],
+  config: AiConfigData,
+  spec: ProviderSpec
+): Promise<string> {
+  const systemMsg = messages.find((m) => m.role === "system")?.content || "";
+  const chatMessages = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+  const baseUrl = getBaseUrl(config);
+  const url = `${baseUrl}${spec.chatPath}`;
+  const headers = buildHeaders(config, spec);
+  const params = sanitizeParams(config);
+
+  // Build multimodal content for the last user message
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const apiMessages: any[] = chatMessages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const lastUserIdx = apiMessages.findLastIndex(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (m: any) => m.role === "user"
+  );
+  if (lastUserIdx >= 0 && images.length > 0) {
+    const lastUser = apiMessages[lastUserIdx];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const content: any[] = [{ type: "text", text: lastUser.content }];
+    for (const img of images) {
+      content.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: img.mimeType,
+          data: img.data,
+        },
+      });
+      content.push({
+        type: "text",
+        text: `[${IMAGE_TYPE_LABELS[img.type] || img.type}]`,
+      });
+    }
+    lastUser.content = content;
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model: config.model,
+      system: systemMsg,
+      messages: apiMessages,
+      ...params,
+    }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(
+      `[${config.provider}] Anthropic Vision API 调用失败 (${res.status})\n` +
+      `请求地址: ${url}\n` +
+      `模型: ${config.model}\n` +
+      `响应: ${errBody}`
+    );
+  }
+
+  const data = await res.json();
+  return data.content?.[0]?.text || "";
+}
+
 // Check if LLM is enabled and configured
 export async function isLLMEnabled(): Promise<boolean> {
   const config = await getAiConfig();

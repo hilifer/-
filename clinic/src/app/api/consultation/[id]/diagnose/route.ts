@@ -4,9 +4,20 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateDiagnosis } from "@/lib/ai-consultation";
 import { checkPrescriptionSafety } from "@/lib/safety-check";
-import { isLLMEnabled, callLLM, getAiConfig } from "@/lib/llm-service";
+import { isLLMEnabled, callLLM, callLLMWithImages, getAiConfig } from "@/lib/llm-service";
+import type { ImageInput } from "@/lib/llm-service";
 
-const DIAGNOSIS_PROMPT = `你是一位经验丰富的中医师。请根据以下问诊对话记录，进行辨证分析并开具处方。
+const IMAGE_TYPE_LABELS: Record<string, string> = {
+  TONGUE: "舌诊",
+  FACE: "面诊",
+  FINGER: "指纹诊",
+};
+
+const DIAGNOSIS_PROMPT = `你是一位经验丰富的中医师。请根据以下问诊对话记录和望诊照片（如有），进行辨证分析并开具处方。
+
+如果提供了舌诊照片，请分析舌质（颜色、形态）和舌苔（厚薄、颜色、润燥）。
+如果提供了面诊照片，请分析面色（红润/苍白/萎黄/晦暗等）。
+如果提供了指纹照片，请分析指纹颜色和形态。
 
 请严格按照以下JSON格式返回结果（不要包含其他文字）：
 {
@@ -35,7 +46,8 @@ interface DiagnosisResult {
 }
 
 async function generateLLMDiagnosis(
-  conversationMessages: { role: string; content: string }[]
+  conversationMessages: { role: string; content: string }[],
+  imageInputs: ImageInput[]
 ): Promise<DiagnosisResult> {
   const config = await getAiConfig();
 
@@ -43,17 +55,24 @@ async function generateLLMDiagnosis(
     .map((m) => `${m.role === "USER" ? "患者" : "医师"}：${m.content}`)
     .join("\n");
 
+  const imageDesc = imageInputs.length > 0
+    ? `\n\n附带望诊照片：${imageInputs.map((i) => IMAGE_TYPE_LABELS[i.type] || i.type).join("、")}，请结合照片分析。`
+    : "";
+
   const messages: { role: "system" | "user"; content: string }[] = [
     { role: "system", content: DIAGNOSIS_PROMPT },
     {
       role: "user",
       content: config.systemPrompt
-        ? `${config.systemPrompt}\n\n以下是问诊记录：\n\n${conversationText}\n\n请进行辨证分析并开具处方，严格按JSON格式返回。`
-        : `以下是问诊记录：\n\n${conversationText}\n\n请进行辨证分析并开具处方，严格按JSON格式返回。`,
+        ? `${config.systemPrompt}\n\n以下是问诊记录：\n\n${conversationText}${imageDesc}\n\n请进行辨证分析并开具处方，严格按JSON格式返回。`
+        : `以下是问诊记录：\n\n${conversationText}${imageDesc}\n\n请进行辨证分析并开具处方，严格按JSON格式返回。`,
     },
   ];
 
-  const reply = await callLLM(messages);
+  // Use vision API if images are available, otherwise regular text API
+  const reply = imageInputs.length > 0
+    ? await callLLMWithImages(messages, imageInputs)
+    : await callLLM(messages);
 
   // Extract JSON from response (handle markdown code blocks)
   const jsonMatch = reply.match(/\{[\s\S]*\}/);
@@ -91,7 +110,10 @@ export async function POST(
   const { id } = await params;
   const consultation = await prisma.consultation.findUnique({
     where: { id },
-    include: { messages: { orderBy: { roundNumber: "asc" } } },
+    include: {
+      messages: { orderBy: { roundNumber: "asc" } },
+      images: true,
+    },
   });
 
   if (!consultation) {
@@ -108,13 +130,20 @@ export async function POST(
     extractedInfo: m.extractedInfo ? JSON.parse(m.extractedInfo) : undefined,
   }));
 
+  // Load uploaded images for vision analysis
+  const imageInputs: ImageInput[] = (consultation.images || []).map((img) => ({
+    type: img.type,
+    data: img.data,
+    mimeType: img.mimeType,
+  }));
+
   // Use LLM if enabled, otherwise fall back to rule-based engine
   let result: DiagnosisResult;
   const llmEnabled = await isLLMEnabled();
 
   if (llmEnabled) {
     try {
-      result = await generateLLMDiagnosis(messages);
+      result = await generateLLMDiagnosis(messages, imageInputs);
     } catch (err) {
       console.error("LLM diagnosis failed, falling back to rules:", err);
       result = generateDiagnosis(messages);

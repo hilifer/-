@@ -49,6 +49,7 @@ model Consultation {
   patient      User          @relation(fields: [patientId], references: [id])
   status       String        @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED | DIAGNOSED
   messages     Message[]
+  images       ConsultationImage[]
   diagnosis    Diagnosis?
   prescription Prescription?
   createdAt    DateTime      @default(now())
@@ -63,6 +64,17 @@ model Message {
   content        String
   extractedInfo  String       @default("")
   roundNumber    Int
+  createdAt      DateTime     @default(now())
+}
+
+model ConsultationImage {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id])
+  type           String       // TONGUE | FACE | FINGER
+  data           String       // base64 encoded image data
+  mimeType       String       @default("image/jpeg")
+  description    String       @default("") // AI-generated or user description
   createdAt      DateTime     @default(now())
 }
 

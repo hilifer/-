@@ -190,6 +190,7 @@ export async function GET(
     where: { id },
     include: {
       messages: { orderBy: { roundNumber: "asc" } },
+      images: { select: { id: true, type: true, data: true, mimeType: true, description: true } },
       diagnosis: true,
       prescription: true,
     },

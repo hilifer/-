@@ -13,6 +13,19 @@ interface ChatMessage {
   content: string;
 }
 
+interface UploadedImage {
+  type: "TONGUE" | "FACE" | "FINGER";
+  preview: string; // data URL for display
+  uploading?: boolean;
+  uploaded?: boolean;
+}
+
+const IMAGE_TYPES = [
+  { type: "TONGUE" as const, label: "舌诊", desc: "拍摄舌头正面照片" },
+  { type: "FACE" as const, label: "面诊", desc: "拍摄面部正面照片" },
+  { type: "FINGER" as const, label: "指纹", desc: "拍摄手指指纹照片" },
+];
+
 export default function ConsultationPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -25,6 +38,12 @@ export default function ConsultationPage() {
   const [currentRound, setCurrentRound] = useState(0);
   const maxRounds = 8;
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Image upload state
+  const [images, setImages] = useState<Record<string, UploadedImage>>({});
+  const [imagePanel, setImagePanel] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeImageType, setActiveImageType] = useState<"TONGUE" | "FACE" | "FINGER">("TONGUE");
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -111,6 +130,93 @@ export default function ConsultationPage() {
     }
     setLoading(false);
   };
+
+  // Image upload handler
+  const handleImageSelect = (type: "TONGUE" | "FACE" | "FINGER") => {
+    setActiveImageType(type);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !consultationId) return;
+
+    // Validate
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      alert("请上传 JPG、PNG 或 WebP 格式的图片");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("图片大小不能超过 5MB");
+      return;
+    }
+
+    // Read as base64
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",")[1];
+      const mimeType = file.type;
+
+      // Show preview immediately
+      setImages((prev) => ({
+        ...prev,
+        [activeImageType]: {
+          type: activeImageType,
+          preview: dataUrl,
+          uploading: true,
+          uploaded: false,
+        },
+      }));
+
+      // Upload to backend
+      const res = await fetch(
+        `/api/consultation/${consultationId}/image`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: activeImageType,
+            data: base64,
+            mimeType,
+          }),
+        }
+      );
+
+      if (res.ok) {
+        setImages((prev) => ({
+          ...prev,
+          [activeImageType]: {
+            ...prev[activeImageType],
+            uploading: false,
+            uploaded: true,
+          },
+        }));
+      } else {
+        const err = await res.json();
+        alert(err.error || "上传失败");
+        setImages((prev) => {
+          const next = { ...prev };
+          delete next[activeImageType];
+          return next;
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  };
+
+  const removeImage = (type: string) => {
+    setImages((prev) => {
+      const next = { ...prev };
+      delete next[type];
+      return next;
+    });
+  };
+
+  const uploadedCount = Object.values(images).filter((i) => i.uploaded).length;
 
   if (status === "loading") {
     return (
@@ -199,22 +305,118 @@ export default function ConsultationPage() {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Image upload panel */}
+          {imagePanel && (
+            <div className="mb-3 rounded-lg border border-gray-700 bg-gray-800/50 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-300">
+                  上传望诊照片（可选）
+                </span>
+                <button
+                  onClick={() => setImagePanel(false)}
+                  className="text-gray-500 hover:text-gray-300 text-lg leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {IMAGE_TYPES.map(({ type, label, desc }) => {
+                  const img = images[type];
+                  return (
+                    <div key={type} className="relative">
+                      {img ? (
+                        <div className="relative group">
+                          <img
+                            src={img.preview}
+                            alt={label}
+                            className="w-full h-24 object-cover rounded-lg border border-gray-600"
+                          />
+                          {img.uploading && (
+                            <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                              <span className="text-xs text-white">上传中...</span>
+                            </div>
+                          )}
+                          {img.uploaded && (
+                            <div className="absolute top-1 right-1 bg-emerald-500 rounded-full w-5 h-5 flex items-center justify-center text-white text-xs">
+                              ✓
+                            </div>
+                          )}
+                          <button
+                            onClick={() => removeImage(type)}
+                            className="absolute top-1 left-1 bg-red-600 rounded-full w-5 h-5 flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            ×
+                          </button>
+                          <div className="text-center text-xs text-gray-400 mt-1">{label}</div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleImageSelect(type)}
+                          className="w-full h-24 rounded-lg border-2 border-dashed border-gray-600 hover:border-emerald-500/50 flex flex-col items-center justify-center gap-1 transition-colors"
+                        >
+                          <span className="text-2xl text-gray-500">+</span>
+                          <span className="text-xs text-gray-400">{label}</span>
+                          <span className="text-[10px] text-gray-500">{desc}</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {uploadedCount > 0 && (
+                <p className="text-xs text-emerald-400/70 mt-2">
+                  已上传 {uploadedCount} 张照片，将在辨证分析时参考
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+
           {/* Input area */}
           {!isComplete ? (
-            <div className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-                placeholder="请描述您的症状..."
-                disabled={loading}
-              />
-              <Button onClick={sendMessage} disabled={loading || !input.trim()}>
-                发送
-              </Button>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setImagePanel(!imagePanel)}
+                  className="shrink-0 text-xs"
+                >
+                  {imagePanel ? "收起照片" : `望诊照片${uploadedCount > 0 ? ` (${uploadedCount})` : ""}`}
+                </Button>
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                  placeholder="请描述您的症状..."
+                  disabled={loading}
+                />
+                <Button onClick={sendMessage} disabled={loading || !input.trim()}>
+                  发送
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Show image upload in complete state too */}
+              {!imagePanel && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setImagePanel(true)}
+                  className="text-xs"
+                >
+                  {`上传望诊照片${uploadedCount > 0 ? ` (已上传${uploadedCount}张)` : "（可选，辅助诊断）"}`}
+                </Button>
+              )}
               <AIBanner />
               <Button
                 onClick={requestDiagnosis}
