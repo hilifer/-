@@ -23,6 +23,12 @@ interface SafetyWarningEntry {
   message: string;
 }
 
+const IMAGE_TYPE_LABELS: Record<string, string> = {
+  TONGUE: "舌诊",
+  FACE: "面诊",
+  FINGER: "指纹",
+};
+
 export default function ReviewPage({
   params,
 }: {
@@ -189,6 +195,33 @@ export default function ReviewPage({
               <span className="text-emerald-300">{diagnosis.recommendedFormula}</span>
             </p>
             <p className="text-gray-400 text-sm">{diagnosis.reasoning}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Uploaded images */}
+      {consultation.images && consultation.images.length > 0 && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>望诊照片</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-3">
+              {consultation.images.map(
+                (img: { id: string; type: string; data: string; mimeType: string }) => (
+                  <div key={img.id} className="text-center">
+                    <img
+                      src={`data:${img.mimeType};base64,${img.data}`}
+                      alt={IMAGE_TYPE_LABELS[img.type] || img.type}
+                      className="w-full h-28 object-cover rounded-lg border border-gray-700"
+                    />
+                    <span className="text-xs text-gray-400 mt-1 block">
+                      {IMAGE_TYPE_LABELS[img.type] || img.type}
+                    </span>
+                  </div>
+                )
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
