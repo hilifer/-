@@ -180,33 +180,56 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: "未登录" }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    // Try with images first, fallback without if table doesn't exist
+    let consultation;
+    try {
+      consultation = await prisma.consultation.findUnique({
+        where: { id },
+        include: {
+          messages: { orderBy: { roundNumber: "asc" } },
+          images: { select: { id: true, type: true, data: true, mimeType: true, description: true } },
+          diagnosis: true,
+          prescription: true,
+        },
+      });
+    } catch {
+      // Fallback: query without images if the table doesn't exist yet
+      consultation = await prisma.consultation.findUnique({
+        where: { id },
+        include: {
+          messages: { orderBy: { roundNumber: "asc" } },
+          diagnosis: true,
+          prescription: true,
+        },
+      });
+    }
+
+    if (!consultation) {
+      return NextResponse.json({ error: "问诊不存在" }, { status: 404 });
+    }
+
+    // Patients can only see their own; doctors can see all
+    if (
+      session.user.role === "PATIENT" &&
+      consultation.patientId !== session.user.id
+    ) {
+      return NextResponse.json({ error: "无权访问" }, { status: 403 });
+    }
+
+    return NextResponse.json(consultation);
+  } catch (err) {
+    console.error("GET /consultation/[id]/message error:", err);
+    return NextResponse.json(
+      { error: "服务器内部错误", detail: String(err) },
+      { status: 500 }
+    );
   }
-
-  const { id } = await params;
-  const consultation = await prisma.consultation.findUnique({
-    where: { id },
-    include: {
-      messages: { orderBy: { roundNumber: "asc" } },
-      images: { select: { id: true, type: true, data: true, mimeType: true, description: true } },
-      diagnosis: true,
-      prescription: true,
-    },
-  });
-
-  if (!consultation) {
-    return NextResponse.json({ error: "问诊不存在" }, { status: 404 });
-  }
-
-  // Patients can only see their own; doctors can see all
-  if (
-    session.user.role === "PATIENT" &&
-    consultation.patientId !== session.user.id
-  ) {
-    return NextResponse.json({ error: "无权访问" }, { status: 403 });
-  }
-
-  return NextResponse.json(consultation);
 }

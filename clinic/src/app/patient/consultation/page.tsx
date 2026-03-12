@@ -90,7 +90,10 @@ export default function ConsultationPage() {
 
       // Fetch the first AI message
       const msgRes = await fetch(`/api/consultation/${data.id}/message`);
-      if (!msgRes.ok) throw new Error("获取问诊消息失败");
+      if (!msgRes.ok) {
+        const errData = await msgRes.json().catch(() => ({}));
+        throw new Error(errData.error || errData.detail || `获取问诊消息失败 (${msgRes.status})`);
+      }
       const consultation = await msgRes.json();
       if (consultation.messages) {
         setMessages(
