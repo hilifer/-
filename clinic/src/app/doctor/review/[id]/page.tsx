@@ -146,12 +146,23 @@ export default function ReviewPage({
 
   const diagnosis = consultation.diagnosis;
   const hasErrors = warnings.some((w) => w.severity === "ERROR");
+  const isSigned = consultation.prescription?.status === "SIGNED";
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <AIBanner />
 
-      <h1 className="my-6 text-2xl font-bold text-emerald-400">处方审核</h1>
+      <div className="my-6 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-emerald-400">
+          {isSigned ? "处方详情" : "处方审核"}
+        </h1>
+        <button
+          onClick={() => router.push("/doctor/patients")}
+          className="text-sm text-gray-400 hover:text-emerald-400"
+        >
+          ← 返回列表
+        </button>
+      </div>
 
       {/* Patient info */}
       {(consultation.patientName || consultation.patientGender || consultation.patientAge || consultation.patientWeight) && (
@@ -260,92 +271,112 @@ export default function ReviewPage({
         </CardContent>
       </Card>
 
-      {/* Adoption level */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>采纳AI建议</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            <Button
-              variant={adoptionLevel === "ADOPT_ALL" ? "default" : "outline"}
-              onClick={() => {
-                setAdoptionLevel("ADOPT_ALL");
-                setHerbs(originalHerbs.map((h) => ({ ...h })));
-              }}
-            >
-              采纳全部
-            </Button>
-            <Button
-              variant={adoptionLevel === "PARTIAL_MODIFY" ? "warning" : "outline"}
-              onClick={() => {
-                setAdoptionLevel("PARTIAL_MODIFY");
-              }}
-              className={
-                adoptionLevel === "PARTIAL_MODIFY"
-                  ? "bg-yellow-600 hover:bg-yellow-700 text-white"
-                  : ""
-              }
-            >
-              部分修改
-            </Button>
-            <Button
-              variant={adoptionLevel === "FULL_REWRITE" ? "destructive" : "outline"}
-              onClick={() => {
-                setAdoptionLevel("FULL_REWRITE");
-                setHerbs([{ name: "", dosage: 9, unit: "g" }]);
-              }}
-            >
-              完全重写
-            </Button>
-          </div>
-          <p className="mt-2 text-xs text-gray-500">
-            {adoptionLevel === "ADOPT_ALL" && "已恢复AI推荐的原始药材"}
-            {adoptionLevel === "PARTIAL_MODIFY" && "可在下方直接编辑药材"}
-            {adoptionLevel === "FULL_REWRITE" && "已清空药材，请重新添加"}
-          </p>
-        </CardContent>
-      </Card>
+      {/* Adoption level - hidden when signed */}
+      {!isSigned && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>采纳AI建议</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3">
+              <Button
+                variant={adoptionLevel === "ADOPT_ALL" ? "default" : "outline"}
+                onClick={() => {
+                  setAdoptionLevel("ADOPT_ALL");
+                  setHerbs(originalHerbs.map((h) => ({ ...h })));
+                }}
+              >
+                采纳全部
+              </Button>
+              <Button
+                variant={adoptionLevel === "PARTIAL_MODIFY" ? "warning" : "outline"}
+                onClick={() => {
+                  setAdoptionLevel("PARTIAL_MODIFY");
+                }}
+                className={
+                  adoptionLevel === "PARTIAL_MODIFY"
+                    ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                    : ""
+                }
+              >
+                部分修改
+              </Button>
+              <Button
+                variant={adoptionLevel === "FULL_REWRITE" ? "destructive" : "outline"}
+                onClick={() => {
+                  setAdoptionLevel("FULL_REWRITE");
+                  setHerbs([{ name: "", dosage: 9, unit: "g" }]);
+                }}
+              >
+                完全重写
+              </Button>
+            </div>
+            <p className="mt-2 text-xs text-gray-500">
+              {adoptionLevel === "ADOPT_ALL" && "已恢复AI推荐的原始药材"}
+              {adoptionLevel === "PARTIAL_MODIFY" && "可在下方直接编辑药材"}
+              {adoptionLevel === "FULL_REWRITE" && "已清空药材，请重新添加"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Herbs editor */}
+      {/* Herbs - editable or read-only depending on signed status */}
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>处方药材</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>处方药材</span>
+            {isSigned && <Badge>已签发</Badge>}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {herbs.map((herb, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input
-                  className="flex-1 min-w-0"
-                  value={herb.name}
-                  onChange={(e) => updateHerb(i, "name", e.target.value)}
-                  placeholder="药材名称"
-                />
-                <input
-                  className="w-24 flex-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  type="number"
-                  value={herb.dosage}
-                  onChange={(e) =>
-                    updateHerb(i, "dosage", parseFloat(e.target.value) || 0)
-                  }
-                  placeholder="剂量"
-                />
-                <span className="text-gray-400 text-sm flex-none">{herb.unit}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeHerb(i)}
-                  className="text-red-400 flex-none"
+          {isSigned ? (
+            <div className="flex flex-wrap gap-2">
+              {herbs.map((herb, i) => (
+                <span
+                  key={i}
+                  className="rounded bg-gray-800 px-3 py-1.5 text-sm text-gray-300"
                 >
-                  删除
-                </Button>
+                  {herb.name} {herb.dosage}{herb.unit}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {herbs.map((herb, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      className="flex-1 min-w-0"
+                      value={herb.name}
+                      onChange={(e) => updateHerb(i, "name", e.target.value)}
+                      placeholder="药材名称"
+                    />
+                    <input
+                      className="w-24 flex-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      type="number"
+                      value={herb.dosage}
+                      onChange={(e) =>
+                        updateHerb(i, "dosage", parseFloat(e.target.value) || 0)
+                      }
+                      placeholder="剂量"
+                    />
+                    <span className="text-gray-400 text-sm flex-none">{herb.unit}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeHerb(i)}
+                      className="text-red-400 flex-none"
+                    >
+                      删除
+                    </Button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <Button variant="outline" size="sm" onClick={addHerb} className="mt-3">
-            + 添加药材
-          </Button>
+              <Button variant="outline" size="sm" onClick={addHerb} className="mt-3">
+                + 添加药材
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -380,33 +411,46 @@ export default function ReviewPage({
           <CardTitle>医嘱备注</CardTitle>
         </CardHeader>
         <CardContent>
-          <textarea
-            className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none min-h-[80px]"
-            value={doctorNotes}
-            onChange={(e) => setDoctorNotes(e.target.value)}
-            placeholder="输入医嘱或备注信息..."
-          />
+          {isSigned ? (
+            <p className="text-gray-300">{doctorNotes || "无"}</p>
+          ) : (
+            <textarea
+              className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none min-h-[80px]"
+              value={doctorNotes}
+              onChange={(e) => setDoctorNotes(e.target.value)}
+              placeholder="输入医嘱或备注信息..."
+            />
+          )}
         </CardContent>
       </Card>
 
-      {/* Action buttons */}
-      <div className="flex gap-4">
-        <Button onClick={saveReview} disabled={saving} variant="outline">
-          {saving ? "保存中..." : "保存修改"}
-        </Button>
-        <Button
-          onClick={signPrescription}
-          disabled={signing || hasErrors}
-          className={hasErrors ? "opacity-50" : ""}
-        >
-          {signing ? "签发中..." : "签发处方"}
-        </Button>
-        {hasErrors && (
-          <p className="flex items-center text-sm text-red-400">
-            存在安全错误，请先修改处方
-          </p>
-        )}
-      </div>
+      {/* Sign time for signed prescriptions */}
+      {isSigned && consultation.prescription?.signedAt && (
+        <p className="mb-6 text-xs text-gray-600">
+          签发时间：{new Date(consultation.prescription.signedAt).toLocaleString("zh-CN")}
+        </p>
+      )}
+
+      {/* Action buttons - hidden when signed */}
+      {!isSigned && (
+        <div className="flex gap-4">
+          <Button onClick={saveReview} disabled={saving} variant="outline">
+            {saving ? "保存中..." : "保存修改"}
+          </Button>
+          <Button
+            onClick={signPrescription}
+            disabled={signing || hasErrors}
+            className={hasErrors ? "opacity-50" : ""}
+          >
+            {signing ? "签发中..." : "签发处方"}
+          </Button>
+          {hasErrors && (
+            <p className="flex items-center text-sm text-red-400">
+              存在安全错误，请先修改处方
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Image lightbox */}
       {lightboxSrc && (

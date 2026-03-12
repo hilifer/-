@@ -144,7 +144,12 @@ export default function DoctorPatientsPage() {
                       {c.diagnosis?.recommendedFormula}
                     </p>
                   </div>
-                  <Badge>已签发</Badge>
+                  <div className="flex items-center gap-3">
+                    <Badge>已签发</Badge>
+                    <Link href={`/doctor/review/${c.id}`}>
+                      <Button size="sm" variant="outline">查看</Button>
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             ))}

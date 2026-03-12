@@ -132,14 +132,22 @@ export default function PrescriptionsPage() {
                         医嘱：{c.prescription.doctorNotes}
                       </p>
                     )}
-                    <p className="mt-2 text-xs text-gray-600">
-                      签发时间：
-                      {c.prescription?.signedAt
-                        ? new Date(c.prescription.signedAt).toLocaleString(
-                            "zh-CN"
-                          )
-                        : "-"}
-                    </p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <p className="text-xs text-gray-600">
+                        签发时间：
+                        {c.prescription?.signedAt
+                          ? new Date(c.prescription.signedAt).toLocaleString(
+                              "zh-CN"
+                            )
+                          : "-"}
+                      </p>
+                      <Link
+                        href={`/patient/prescriptions/${c.id}`}
+                        className="text-sm text-emerald-400 hover:underline"
+                      >
+                        查看详情 →
+                      </Link>
+                    </div>
                   </CardContent>
                 </Card>
               );
