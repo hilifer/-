@@ -141,6 +141,28 @@ function buildHeaders(config: AiConfigData, spec: ProviderSpec): Record<string, 
   return headers;
 }
 
+// Sanitize parameters for provider/model-specific constraints
+function sanitizeParams(config: AiConfigData): { temperature: number; max_tokens: number } {
+  let temperature = config.temperature;
+  const max_tokens = config.maxTokens;
+
+  // Some models restrict temperature to specific values
+  // Kimi K2.5: only temperature=1 is allowed
+  if (config.provider === "kimi" && config.model.includes("k2")) {
+    temperature = 1;
+  }
+
+  // OpenAI o1/o3 reasoning models: temperature must be 1
+  if (config.provider === "openai" && /^(o1|o3)/.test(config.model)) {
+    temperature = 1;
+  }
+
+  // Clamp temperature to valid range [0, 2] for most providers
+  temperature = Math.max(0, Math.min(2, temperature));
+
+  return { temperature, max_tokens };
+}
+
 // OpenAI-compatible chat completions
 async function callOpenAIFormat(
   messages: ChatMessage[],
@@ -151,14 +173,15 @@ async function callOpenAIFormat(
   const url = `${baseUrl}${spec.chatPath}`;
   const headers = buildHeaders(config, spec);
 
+  const params = sanitizeParams(config);
+
   const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify({
       model: config.model,
       messages,
-      temperature: config.temperature,
-      max_tokens: config.maxTokens,
+      ...params,
     }),
   });
 
@@ -191,15 +214,16 @@ async function callAnthropicFormat(
   const url = `${baseUrl}${spec.chatPath}`;
   const headers = buildHeaders(config, spec);
 
+  const params = sanitizeParams(config);
+
   const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify({
       model: config.model,
-      max_tokens: config.maxTokens,
       system: systemMsg,
       messages: chatMessages,
-      temperature: config.temperature,
+      ...params,
     }),
   });
 
