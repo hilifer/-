@@ -43,16 +43,17 @@ export function clearConfigCache() {
 function getBaseUrl(config: AiConfigData): string {
   if (config.baseUrl) return config.baseUrl;
 
-  switch (config.provider) {
-    case "openai":
-      return "https://api.openai.com/v1";
-    case "anthropic":
-      return "https://api.anthropic.com";
-    case "deepseek":
-      return "https://api.deepseek.com/v1";
-    default:
-      return "https://api.openai.com/v1";
-  }
+  const defaults: Record<string, string> = {
+    openai: "https://api.openai.com/v1",
+    anthropic: "https://api.anthropic.com",
+    deepseek: "https://api.deepseek.com/v1",
+    kimi: "https://api.moonshot.cn/v1",
+    qwen: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    zhipu: "https://open.bigmodel.cn/api/paas/v4",
+    baichuan: "https://api.baichuan-ai.com/v1",
+    spark: "https://spark-api-open.xf-yun.com/v1",
+  };
+  return defaults[config.provider] || "https://api.openai.com/v1";
 }
 
 // OpenAI-compatible API call (works for OpenAI, DeepSeek, and custom providers)
