@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getAiConfig, callLLM } from "@/lib/llm-service";
+import { prisma } from "@/lib/prisma";
 
 // Diagnose config issues and return detailed error list
 function diagnoseConfig(config: {
@@ -111,6 +112,13 @@ export async function POST(req: NextRequest) {
         },
       ]);
       const elapsed = Date.now() - startTime;
+
+      // Mark provider as tested
+      await prisma.providerConfig.upsert({
+        where: { id: config.provider },
+        update: { tested: true },
+        create: { id: config.provider, tested: true },
+      });
 
       return NextResponse.json({
         success: true,

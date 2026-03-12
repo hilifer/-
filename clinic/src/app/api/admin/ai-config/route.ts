@@ -12,6 +12,11 @@ async function requireAdmin() {
   return session;
 }
 
+function maskApiKey(key: string): string {
+  if (!key) return "";
+  return "sk-****" + key.slice(-4);
+}
+
 // Validate config before enabling
 function validateForEnable(
   config: { provider: string; model: string; apiKey: string; baseUrl: string },
@@ -53,7 +58,7 @@ function validateForEnable(
   return errors;
 }
 
-// Get current AI config
+// GET: return active config + all provider configs
 export async function GET() {
   const session = await requireAdmin();
   if (!session) {
@@ -61,22 +66,47 @@ export async function GET() {
   }
 
   let config = await prisma.aiConfig.findUnique({ where: { id: "singleton" } });
-
   if (!config) {
-    config = await prisma.aiConfig.create({
-      data: { id: "singleton" },
-    });
+    config = await prisma.aiConfig.create({ data: { id: "singleton" } });
   }
 
-  // Mask API key for security
+  // Load all saved provider configs
+  const providerConfigs = await prisma.providerConfig.findMany();
+
+  // Build provider config map (masked keys)
+  const providers: Record<string, {
+    model: string;
+    apiKey: string;
+    hasApiKey: boolean;
+    baseUrl: string;
+    temperature: number;
+    maxTokens: number;
+    systemPrompt: string;
+    tested: boolean;
+  }> = {};
+
+  for (const pc of providerConfigs) {
+    providers[pc.id] = {
+      model: pc.model,
+      apiKey: maskApiKey(pc.apiKey),
+      hasApiKey: !!pc.apiKey,
+      baseUrl: pc.baseUrl,
+      temperature: pc.temperature,
+      maxTokens: pc.maxTokens,
+      systemPrompt: pc.systemPrompt,
+      tested: pc.tested,
+    };
+  }
+
   return NextResponse.json({
     ...config,
-    apiKey: config.apiKey ? "sk-****" + config.apiKey.slice(-4) : "",
+    apiKey: maskApiKey(config.apiKey),
     hasApiKey: !!config.apiKey,
+    providers,
   });
 }
 
-// Update AI config
+// PUT: save config — also persists per-provider config
 export async function PUT(req: NextRequest) {
   const session = await requireAdmin();
   if (!session) {
@@ -95,9 +125,12 @@ export async function PUT(req: NextRequest) {
     systemPrompt,
   } = body;
 
+  // Resolve actual apiKey (if user didn't change, use stored)
+  const newApiKey =
+    typeof apiKey === "string" && !apiKey.startsWith("sk-****") ? apiKey : undefined;
+
   // If trying to enable, validate all required fields
   if (enabled === true) {
-    // Get existing config to check stored apiKey
     const existing = await prisma.aiConfig.findUnique({ where: { id: "singleton" } });
 
     const configToCheck = {
@@ -106,10 +139,6 @@ export async function PUT(req: NextRequest) {
       apiKey: existing?.apiKey || "",
       baseUrl: typeof baseUrl === "string" ? baseUrl : existing?.baseUrl || "",
     };
-
-    // If a new apiKey is provided (not masked), use it for validation
-    const newApiKey =
-      typeof apiKey === "string" && !apiKey.startsWith("sk-****") ? apiKey : undefined;
 
     const errors = validateForEnable(configToCheck, newApiKey);
     if (errors.length > 0) {
@@ -120,15 +149,13 @@ export async function PUT(req: NextRequest) {
     }
   }
 
-  // Build update data
+  // Build main config update
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateData: Record<string, any> = {};
   if (typeof enabled === "boolean") updateData.enabled = enabled;
   if (provider) updateData.provider = provider;
   if (model) updateData.model = model;
-  if (typeof apiKey === "string" && !apiKey.startsWith("sk-****")) {
-    updateData.apiKey = apiKey;
-  }
+  if (newApiKey) updateData.apiKey = newApiKey;
   if (typeof baseUrl === "string") updateData.baseUrl = baseUrl;
   if (typeof temperature === "number") {
     updateData.temperature = Math.min(2, Math.max(0, temperature));
@@ -144,12 +171,70 @@ export async function PUT(req: NextRequest) {
     create: { id: "singleton", ...updateData },
   });
 
-  // Clear cache so new config takes effect immediately
+  // Also save per-provider config for the current provider
+  if (provider) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const providerData: Record<string, any> = {};
+    if (model) providerData.model = model;
+    if (newApiKey) providerData.apiKey = newApiKey;
+    if (typeof baseUrl === "string") providerData.baseUrl = baseUrl;
+    if (typeof temperature === "number") {
+      providerData.temperature = Math.min(2, Math.max(0, temperature));
+    }
+    if (typeof maxTokens === "number") {
+      providerData.maxTokens = Math.min(32768, Math.max(256, maxTokens));
+    }
+    if (typeof systemPrompt === "string") providerData.systemPrompt = systemPrompt;
+
+    // If no new API key provided, try to keep existing provider key
+    if (!newApiKey) {
+      const existingProvider = await prisma.providerConfig.findUnique({
+        where: { id: provider },
+      });
+      if (existingProvider?.apiKey) {
+        // keep existing key, just update other fields
+      }
+    }
+
+    await prisma.providerConfig.upsert({
+      where: { id: provider },
+      update: providerData,
+      create: { id: provider, ...providerData },
+    });
+  }
+
   clearConfigCache();
+
+  // Re-fetch all provider configs
+  const providerConfigs = await prisma.providerConfig.findMany();
+  const providers: Record<string, {
+    model: string;
+    apiKey: string;
+    hasApiKey: boolean;
+    baseUrl: string;
+    temperature: number;
+    maxTokens: number;
+    systemPrompt: string;
+    tested: boolean;
+  }> = {};
+
+  for (const pc of providerConfigs) {
+    providers[pc.id] = {
+      model: pc.model,
+      apiKey: maskApiKey(pc.apiKey),
+      hasApiKey: !!pc.apiKey,
+      baseUrl: pc.baseUrl,
+      temperature: pc.temperature,
+      maxTokens: pc.maxTokens,
+      systemPrompt: pc.systemPrompt,
+      tested: pc.tested,
+    };
+  }
 
   return NextResponse.json({
     ...config,
-    apiKey: config.apiKey ? "sk-****" + config.apiKey.slice(-4) : "",
+    apiKey: maskApiKey(config.apiKey),
     hasApiKey: !!config.apiKey,
+    providers,
   });
 }

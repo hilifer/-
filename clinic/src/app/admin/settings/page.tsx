@@ -124,6 +124,17 @@ const SYSTEM_PROMPTS = {
   },
 };
 
+interface ProviderSavedConfig {
+  model: string;
+  apiKey: string;
+  hasApiKey: boolean;
+  baseUrl: string;
+  temperature: number;
+  maxTokens: number;
+  systemPrompt: string;
+  tested: boolean;
+}
+
 interface AiConfig {
   enabled: boolean;
   provider: string;
@@ -134,6 +145,7 @@ interface AiConfig {
   temperature: number;
   maxTokens: number;
   systemPrompt: string;
+  providers?: Record<string, ProviderSavedConfig>;
 }
 
 interface ChatMessage {
@@ -409,29 +421,56 @@ export default function AdminSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-3 mb-4">
-            {PROVIDERS.map((p) => (
-              <button
-                key={p.id}
-                onClick={() =>
-                  setConfig({
-                    ...config,
-                    provider: p.id,
-                    model: p.models[0] || config.model,
-                    baseUrl: p.defaultBaseUrl || (p.id === "custom" ? config.baseUrl : ""),
-                  })
-                }
-                className={`rounded-lg border px-4 py-3 text-left transition-colors ${
-                  config.provider === p.id
-                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
-                    : "border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600"
-                }`}
-              >
-                <div className="font-medium">{p.label}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {p.models.length > 0 ? p.models.join(", ") : "自定义模型"}
-                </div>
-              </button>
-            ))}
+            {PROVIDERS.map((p) => {
+              const saved = config.providers?.[p.id];
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    // Load saved provider config if available
+                    if (saved) {
+                      setConfig({
+                        ...config,
+                        provider: p.id,
+                        model: saved.model || p.models[0] || config.model,
+                        baseUrl: saved.baseUrl || p.defaultBaseUrl || "",
+                        temperature: saved.temperature ?? config.temperature,
+                        maxTokens: saved.maxTokens ?? config.maxTokens,
+                        systemPrompt: saved.systemPrompt ?? config.systemPrompt,
+                        apiKey: saved.apiKey,
+                        hasApiKey: saved.hasApiKey,
+                      });
+                      setNewApiKey("");
+                    } else {
+                      setConfig({
+                        ...config,
+                        provider: p.id,
+                        model: p.models[0] || config.model,
+                        baseUrl: p.defaultBaseUrl || (p.id === "custom" ? config.baseUrl : ""),
+                      });
+                    }
+                  }}
+                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                    config.provider === p.id
+                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                      : "border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-600"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{p.label}</span>
+                    {saved?.tested && (
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" title="已测试通过" />
+                    )}
+                    {saved?.hasApiKey && !saved?.tested && (
+                      <span className="inline-block w-2 h-2 rounded-full bg-yellow-400" title="已配置密钥" />
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {p.models.length > 0 ? p.models.join(", ") : "自定义模型"}
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           {/* Model selection */}
@@ -844,6 +883,42 @@ export default function AdminSettingsPage() {
                 : "使用默认"}
             </span>
           </div>
+
+          {/* Configured providers summary */}
+          {config.providers && Object.keys(config.providers).length > 0 && (
+            <div className="mt-4 border-t border-gray-700 pt-4">
+              <div className="text-sm text-gray-400 mb-2">已配置的提供商：</div>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(config.providers).map(([id, pc]) => {
+                  const label = PROVIDERS.find((p) => p.id === id)?.label || id;
+                  return (
+                    <span
+                      key={id}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ${
+                        pc.tested
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                          : pc.hasApiKey
+                          ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/30"
+                          : "bg-gray-800 text-gray-500 border border-gray-700"
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          pc.tested
+                            ? "bg-emerald-400"
+                            : pc.hasApiKey
+                            ? "bg-yellow-400"
+                            : "bg-gray-600"
+                        }`}
+                      />
+                      {label}
+                      {pc.tested ? " (已测试)" : pc.hasApiKey ? " (已配置)" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

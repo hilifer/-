@@ -83,13 +83,26 @@ model Diagnosis {
 model AiConfig {
   id            String   @id @default("singleton")
   enabled       Boolean  @default(false)
-  provider      String   @default("openai")    // openai | anthropic | deepseek | custom
+  provider      String   @default("openai")    // active provider id
   model         String   @default("gpt-4o")
   apiKey        String   @default("")
   baseUrl       String   @default("")           // Custom API base URL
   temperature   Float    @default(0.7)
   maxTokens     Int      @default(2048)
   systemPrompt  String   @default("")           // Custom system prompt for TCM consultation
+  updatedAt     DateTime @updatedAt
+}
+
+// Per-provider saved configs — allows switching without re-entering credentials
+model ProviderConfig {
+  id            String   @id // provider id: openai, anthropic, deepseek, kimi, qwen, zhipu, baichuan, spark, custom
+  model         String   @default("")
+  apiKey        String   @default("")
+  baseUrl       String   @default("")
+  temperature   Float    @default(0.7)
+  maxTokens     Int      @default(2048)
+  systemPrompt  String   @default("")
+  tested        Boolean  @default(false)        // whether connection test passed
   updatedAt     DateTime @updatedAt
 }
 
