@@ -35,7 +35,7 @@ const PROVIDERS = [
     id: "kimi",
     label: "Kimi (月之暗面)",
     defaultBaseUrl: "https://api.moonshot.cn/v1",
-    models: ["kimi-2.5", "moonshot-v1-128k", "moonshot-v1-32k", "moonshot-v1-8k"],
+    models: ["kimi-k2.5", "moonshot-v1-128k", "moonshot-v1-32k", "moonshot-v1-8k"],
   },
   {
     id: "qwen",
