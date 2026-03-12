@@ -12,6 +12,10 @@ interface ConsultationItem {
   id: string;
   status: string;
   createdAt: string;
+  patientName?: string;
+  patientGender?: string;
+  patientAge?: number | null;
+  patientWeight?: number | null;
   patient: { name: string; phone: string };
   diagnosis: {
     syndromeType: string;
@@ -72,7 +76,20 @@ export default function DoctorPatientsPage() {
               <Card key={c.id}>
                 <CardContent className="flex items-center justify-between py-4">
                   <div>
-                    <p className="text-lg text-gray-200">{c.patient.name}</p>
+                    <p className="text-lg text-gray-200">
+                      {c.patientName || c.patient.name}
+                      {c.patientGender && (
+                        <span className="ml-2 text-sm text-gray-400">
+                          {c.patientGender === "MALE" ? "男" : "女"}
+                        </span>
+                      )}
+                      {c.patientAge && (
+                        <span className="ml-2 text-sm text-gray-400">{c.patientAge}岁</span>
+                      )}
+                      {c.patientWeight && (
+                        <span className="ml-2 text-sm text-gray-400">{c.patientWeight}kg</span>
+                      )}
+                    </p>
                     <p className="text-sm text-gray-500">
                       {c.diagnosis?.syndromeType || "未辨证"} ·{" "}
                       {c.diagnosis?.recommendedFormula || ""}
@@ -108,7 +125,20 @@ export default function DoctorPatientsPage() {
               <Card key={c.id} className="opacity-60">
                 <CardContent className="flex items-center justify-between py-4">
                   <div>
-                    <p className="text-gray-300">{c.patient.name}</p>
+                    <p className="text-gray-300">
+                      {c.patientName || c.patient.name}
+                      {c.patientGender && (
+                        <span className="ml-2 text-sm text-gray-500">
+                          {c.patientGender === "MALE" ? "男" : "女"}
+                        </span>
+                      )}
+                      {c.patientAge && (
+                        <span className="ml-2 text-sm text-gray-500">{c.patientAge}岁</span>
+                      )}
+                      {c.patientWeight && (
+                        <span className="ml-2 text-sm text-gray-500">{c.patientWeight}kg</span>
+                      )}
+                    </p>
                     <p className="text-sm text-gray-500">
                       {c.diagnosis?.syndromeType} ·{" "}
                       {c.diagnosis?.recommendedFormula}

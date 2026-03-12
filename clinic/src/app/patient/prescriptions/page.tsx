@@ -31,6 +31,10 @@ export default function PrescriptionsPage() {
       id: string;
       status: string;
       createdAt: string;
+      patientName?: string;
+      patientGender?: string;
+      patientAge?: number | null;
+      patientWeight?: number | null;
       diagnosis: { syndromeType: string; recommendedFormula: string } | null;
       prescription: PrescriptionItem | null;
     }[]
@@ -101,6 +105,17 @@ export default function PrescriptionsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
+                    {/* Patient info */}
+                    {(c.patientName || c.patientGender || c.patientAge || c.patientWeight) && (
+                      <div className="mb-3 flex gap-4 text-sm text-gray-400">
+                        {c.patientName && <span>姓名：{c.patientName}</span>}
+                        {c.patientGender && (
+                          <span>性别：{c.patientGender === "MALE" ? "男" : "女"}</span>
+                        )}
+                        {c.patientAge && <span>年龄：{c.patientAge}岁</span>}
+                        {c.patientWeight && <span>体重：{c.patientWeight}kg</span>}
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
                       {herbs.map((h, i) => (
                         <span
