@@ -90,7 +90,7 @@ const SYSTEM_PROMPTS = {
 3. 对患者的回答要有简短的回应和小结，再引出下一个问题
 4. 注意倾听，对患者提到的关键症状要追问细节
 5. 态度温和亲切，体现对患者的关心
-6. 当前是第{round}轮问诊，共8轮
+6. 当前是第{round}轮问诊，共{maxRounds}轮，{remainingHint}
 7. 回复控制在100字以内`,
   },
   diagnosis: {
@@ -221,18 +221,35 @@ export default function AdminSettingsPage() {
     return errors;
   }
 
-  // Attempt to enable - validates first
-  function handleToggleEnable() {
+  // Toggle AI enable/disable — auto-saves on disable
+  async function handleToggleEnable() {
     if (!config) return;
 
     if (config.enabled) {
-      // Disabling — always allowed
-      setConfig({ ...config, enabled: false });
+      // Disabling — auto-save immediately
+      const disabledConfig = { ...config, enabled: false };
+      setConfig(disabledConfig);
       setValidationErrors([]);
+
+      const payload = {
+        ...disabledConfig,
+        apiKey: newApiKey || config.apiKey,
+      };
+      const res = await fetch("/api/admin/ai-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConfig(data);
+        setMessage("已关闭大模型，已切换到规则引擎模式");
+        setMessageType("success");
+      }
       return;
     }
 
-    // Enabling — validate
+    // Enabling — validate first
     const errors = validate(config, newApiKey);
     if (errors.length > 0) {
       setValidationErrors(errors);

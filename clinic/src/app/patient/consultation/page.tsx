@@ -22,6 +22,8 @@ export default function ConsultationPage() {
   const [loading, setLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [diagnosing, setDiagnosing] = useState(false);
+  const [currentRound, setCurrentRound] = useState(0);
+  const maxRounds = 8;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,6 +71,7 @@ export default function ConsultationPage() {
       { role: "ASSISTANT", content: data.aiMessage },
     ]);
     setIsComplete(data.isComplete);
+    if (data.currentRound) setCurrentRound(data.currentRound);
     setLoading(false);
   };
 
@@ -111,6 +114,34 @@ export default function ConsultationPage() {
         </Card>
       ) : (
         <div className="flex flex-col h-[70vh]">
+          {/* Round progress */}
+          {!isComplete && currentRound > 0 && (
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex-1">
+                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                  <span>问诊进度</span>
+                  <span>第 {currentRound} / {maxRounds} 轮</span>
+                </div>
+                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                    style={{ width: `${(currentRound / maxRounds) * 100}%` }}
+                  />
+                </div>
+              </div>
+              {currentRound >= 3 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsComplete(true)}
+                  className="text-xs whitespace-nowrap"
+                >
+                  跳过，直接诊断
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* Chat messages */}
           <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
             {messages.map((msg, i) => (
