@@ -155,6 +155,9 @@ export default function AdminSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState("");
   const [testSuccess, setTestSuccess] = useState(false);
+  const [testDetails, setTestDetails] = useState<string[]>([]);
+  const [testHint, setTestHint] = useState("");
+  const [testLatency, setTestLatency] = useState("");
 
   // Chat test
   const [chatOpen, setChatOpen] = useState(false);
@@ -277,6 +280,9 @@ export default function AdminSettingsPage() {
   const testConnection = async () => {
     setTesting(true);
     setTestResult("");
+    setTestDetails([]);
+    setTestHint("");
+    setTestLatency("");
 
     const res = await fetch("/api/admin/ai-config/test", {
       method: "POST",
@@ -286,11 +292,14 @@ export default function AdminSettingsPage() {
     const data = await res.json();
 
     setTestSuccess(!!data.success);
-    setTestResult(
-      data.success
-        ? "连接成功: " + data.message
-        : "连接失败: " + data.error
-    );
+    if (data.success) {
+      setTestResult(data.message);
+      setTestLatency(data.latency || "");
+    } else {
+      setTestResult(data.error || "测试失败");
+      setTestDetails(data.details || []);
+      setTestHint(data.hint || "");
+    }
     setTesting(false);
   };
 
@@ -633,10 +642,8 @@ export default function AdminSettingsPage() {
             <Button
               variant="outline"
               onClick={testConnection}
-              disabled={testing || !config.enabled}
-              title={
-                !config.enabled ? "请先启用并保存大模型配置" : "发送测试请求"
-              }
+              disabled={testing}
+              title="发送测试请求，检查配置是否正确"
             >
               {testing ? "测试中..." : "测试连接"}
             </Button>
@@ -669,13 +676,45 @@ export default function AdminSettingsPage() {
           )}
           {testResult && (
             <div
-              className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+              className={`mt-3 rounded-lg border px-4 py-3 text-sm ${
                 testSuccess
-                  ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
-                  : "border-red-500/50 bg-red-500/10 text-red-300"
+                  ? "border-emerald-500/50 bg-emerald-500/10"
+                  : "border-red-500/50 bg-red-500/10"
               }`}
             >
-              {testResult}
+              {testSuccess ? (
+                <>
+                  <div className="flex items-center gap-2 text-emerald-400 font-medium mb-2">
+                    <span>连接成功</span>
+                    {testLatency && (
+                      <span className="text-xs text-emerald-500/70">({testLatency})</span>
+                    )}
+                  </div>
+                  <div className="text-emerald-300/80">{testResult}</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-red-400 font-medium mb-2">连接失败</div>
+                  <div className="text-red-300/80 mb-2">{testResult}</div>
+                  {testDetails.length > 0 && (
+                    <div className="mt-2 border-t border-red-500/20 pt-2">
+                      <div className="text-red-400/80 text-xs font-medium mb-1">问题诊断：</div>
+                      <ul className="list-disc list-inside text-red-300/70 text-xs space-y-1">
+                        {testDetails.map((d, i) => (
+                          <li key={i}>{d}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {testHint && (
+                    <div className="mt-2 border-t border-red-500/20 pt-2">
+                      <div className="text-yellow-400/80 text-xs">
+                        <span className="font-medium">建议：</span>{testHint}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
         </CardContent>
