@@ -29,6 +29,12 @@ const IMAGE_TYPE_LABELS: Record<string, string> = {
   FINGER: "指纹",
 };
 
+const ADOPTION_LABELS: Record<string, { text: string; color: string }> = {
+  ADOPT_ALL: { text: "采纳全部", color: "text-emerald-400" },
+  PARTIAL_MODIFY: { text: "部分修改", color: "text-yellow-400" },
+  FULL_REWRITE: { text: "完全重写", color: "text-red-400" },
+};
+
 export default function ReviewPage({
   params,
 }: {
@@ -148,6 +154,40 @@ export default function ReviewPage({
   const hasErrors = warnings.some((w) => w.severity === "ERROR");
   const isSigned = consultation.prescription?.status === "SIGNED";
 
+  // Collect all available images: from ConsultationImage table + legacy Diagnosis fields
+  const allImages: { id: string; type: string; src: string }[] = [];
+  if (consultation.images) {
+    for (const img of consultation.images) {
+      if (img.data) {
+        allImages.push({
+          id: img.id,
+          type: img.type,
+          src: `data:${img.mimeType};base64,${img.data}`,
+        });
+      }
+    }
+  }
+  if (diagnosis?.tongueImage && !allImages.some((i) => i.type === "TONGUE")) {
+    const src = diagnosis.tongueImage.startsWith("data:")
+      ? diagnosis.tongueImage
+      : diagnosis.tongueImage.startsWith("/")
+        ? diagnosis.tongueImage
+        : `data:image/jpeg;base64,${diagnosis.tongueImage}`;
+    allImages.push({ id: "legacy-tongue", type: "TONGUE", src });
+  }
+  if (diagnosis?.faceImage && !allImages.some((i) => i.type === "FACE")) {
+    const src = diagnosis.faceImage.startsWith("data:")
+      ? diagnosis.faceImage
+      : diagnosis.faceImage.startsWith("/")
+        ? diagnosis.faceImage
+        : `data:image/jpeg;base64,${diagnosis.faceImage}`;
+    allImages.push({ id: "legacy-face", type: "FACE", src });
+  }
+
+  const adoptionInfo = consultation.prescription?.adoptionLevel
+    ? ADOPTION_LABELS[consultation.prescription.adoptionLevel]
+    : null;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <AIBanner />
@@ -209,37 +249,48 @@ export default function ReviewPage({
               推荐方剂：
               <span className="text-emerald-300">{diagnosis.recommendedFormula}</span>
             </p>
-            <p className="text-gray-400 text-sm">{diagnosis.reasoning}</p>
+            <p className="text-gray-400 text-sm mb-3">{diagnosis.reasoning}</p>
+            {/* AI recommended original herbs */}
+            {originalHerbs.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">AI推荐原方组成：</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {originalHerbs.map((h, i) => (
+                    <span
+                      key={i}
+                      className="rounded bg-emerald-900/30 px-2 py-0.5 text-xs text-emerald-400"
+                    >
+                      {h.name} {h.dosage}{h.unit}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Uploaded images */}
-      {consultation.images && consultation.images.length > 0 && (
+      {/* Uploaded images (with fallback from legacy Diagnosis fields) */}
+      {allImages.length > 0 && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>望诊照片</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-3">
-              {consultation.images.map(
-                (img: { id: string; type: string; data: string; mimeType: string }) => {
-                  const src = `data:${img.mimeType};base64,${img.data}`;
-                  return (
-                    <div key={img.id} className="text-center">
-                      <img
-                        src={src}
-                        alt={IMAGE_TYPE_LABELS[img.type] || img.type}
-                        className="w-full h-28 object-cover rounded-lg border border-gray-700 cursor-pointer hover:border-emerald-500 transition-colors"
-                        onClick={() => setLightboxSrc(src)}
-                      />
-                      <span className="text-xs text-gray-400 mt-1 block">
-                        {IMAGE_TYPE_LABELS[img.type] || img.type}
-                      </span>
-                    </div>
-                  );
-                }
-              )}
+              {allImages.map((img) => (
+                <div key={img.id} className="text-center">
+                  <img
+                    src={img.src}
+                    alt={IMAGE_TYPE_LABELS[img.type] || img.type}
+                    className="w-full h-28 object-cover rounded-lg border border-gray-700 cursor-pointer hover:border-emerald-500 transition-colors"
+                    onClick={() => setLightboxSrc(img.src)}
+                  />
+                  <span className="text-xs text-gray-400 mt-1 block">
+                    {IMAGE_TYPE_LABELS[img.type] || img.type}
+                  </span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -325,7 +376,14 @@ export default function ReviewPage({
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>处方药材</span>
-            {isSigned && <Badge>已签发</Badge>}
+            <div className="flex items-center gap-2">
+              {isSigned && adoptionInfo && (
+                <span className={`text-xs ${adoptionInfo.color}`}>
+                  {adoptionInfo.text}
+                </span>
+              )}
+              {isSigned && <Badge>已签发</Badge>}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
