@@ -1,0 +1,25 @@
+# 邮箱连接
+# (imaplib 为 Python 标准库，无需额外安装)
+
+# Excel 解析
+openpyxl>=3.1.0
+xlrd>=2.0.0
+
+# PDF 文本提取
+pdfplumber>=0.10.0
+
+# 图片 OCR
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# 配置文件
+PyYAML>=6.0
+
+# 数据处理
+pandas>=2.0.0
+
+# 可视化
+matplotlib>=3.7.0
+plotly>=5.15.0
+
+# 数据库（sqlite3 为标准库）
